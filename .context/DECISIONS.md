@@ -2,29 +2,68 @@
 
 ---
 
-## ADR-001: Use VOICE_RECOGNITION Audio Source
+## ADR-001: Use UNPROCESSED Audio Source
 
-**Date**: 2026-04-19
-**Status**: Accepted
+**Date**: 2026-04-19 (revised 2026-04-19)
+**Status**: Superseded — see revision note
 
 **Context**:
-Android exposes several `MediaRecorder.AudioSource` options. We need the lowest possible latency path from microphone to app.
+Real-world outdoor testing revealed the app was non-functional. DAW analysis of recorded test audio showed the gunshot and wind gusts had near-identical amplitude envelopes. Root cause: AGC (Automatic Gain Control) on the phone normalises mic gain continuously, compressing the gunshot's true amplitude spike to be indistinguishable from wind.
+
+`VOICE_RECOGNITION` was originally chosen believing it bypassed AGC — this was incorrect. It applies noise suppression and AGC.
 
 **Decision**:
-Use `MediaRecorder.AudioSource.VOICE_RECOGNITION`.
+Switch to `MediaRecorder.AudioSource.UNPROCESSED` (API 24+).
 
 **Rationale**:
-- Bypasses AGC (Automatic Gain Control) and noise suppression processing that `MIC` applies
-- Lower processing pipeline = lower latency
-- Preserves raw transient amplitude, which is critical for detecting a sharp gunshot spike
+- `UNPROCESSED` explicitly requests raw microphone data with no AGC, no noise suppression, and no post-processing
+- Restores the true amplitude difference between a gunshot (impulsive, extremely loud in raw terms) and wind (loud but compressed by AGC)
+- API 24 = minSdk 26, so device support is guaranteed for this project
 
 **Consequences**:
-- (+) Lower latency, more accurate amplitude data
-- (-) No noise suppression — detection algorithm must handle ambient noise itself (rolling baseline approach)
+- (+) Gunshot amplitude spike is preserved — RMS-based detection can distinguish it from wind again
+- (-) Truly raw audio means more ambient noise reaches the algorithm — rolling baseline becomes more important
+- (-) `UNPROCESSED` support quality varies by device/manufacturer even on API 24+; some devices may silently fall back to `MIC`
 
 **Alternatives considered**:
-- `MIC`: Default source, but AGC can compress the gunshot spike and add latency
-- `UNPROCESSED`: Even more raw, but inconsistent device support on API 26
+- `VOICE_RECOGNITION`: Previously used; applies AGC — confirmed to fail outdoors
+- `MIC`: Default, also applies AGC on most devices
+- `CAMCORDER`: Optimised for video, not suitable
+
+---
+
+## ADR-005: Transient Duration Confirmation Window
+
+**Date**: 2026-04-19
+**Status**: Accepted — parameters may need field tuning
+
+**Context**:
+Even with `UNPROCESSED` audio, wind gusts can produce sharp amplitude spikes that look like gunshots in a single buffer (pop filter / windscreen effect at the mic). A gunshot transient is genuine; a wind gust peak sustains. The difference is duration: a gunshot RMS drops back toward baseline within ~5–10ms; a wind gust stays elevated for tens to hundreds of milliseconds.
+
+**Decision**:
+On a candidate detection, do not fire immediately. Instead:
+1. Capture the timestamp at the spike (sub-buffer peak index, same as before)
+2. Enter a confirmation window — read the next N buffers
+3. If RMS falls back below `baseline × CONFIRMATION_DROP_MULTIPLIER` within the window → confirm and emit the pre-captured timestamp
+4. If RMS stays elevated → reject as sustained noise (wind)
+
+**Parameters (initial values — expect field tuning)**:
+- `CONFIRMATION_BUFFERS = 3` (~5–10ms at 44100 Hz with current buffer size)
+- `CONFIRMATION_DROP_MULTIPLIER = 3.0` (must drop to within 3× baseline to confirm)
+
+**Rationale**:
+- Gunshot: near-zero rise and fall time (single buffer spike) — will confirm easily
+- Wind gust: even sharp peaks sustain for many buffers — will be rejected
+- Timestamp is captured at the spike, not after the window, so confirmed latency is not added to the reported time
+
+**Consequences**:
+- (+) Rejects sustained-loud sounds (wind, crowd burst) that pass the amplitude check
+- (-) Adds ~5–10ms of confirmation delay before the event is emitted (invisible to timing accuracy since timestamp is pre-captured)
+- (-) Parameters (`CONFIRMATION_BUFFERS`, `CONFIRMATION_DROP_MULTIPLIER`) are empirical — may need adjustment per environment
+
+**Alternatives considered**:
+- Rise-time detection (dRMS/dt): Rejected — sharp wind gusts also have fast rise times, does not discriminate well enough
+- FFT frequency analysis: Would work (wind is low-frequency, gunshots are broadband) but adds significant complexity; revisit if duration check proves insufficient
 
 ---
 
