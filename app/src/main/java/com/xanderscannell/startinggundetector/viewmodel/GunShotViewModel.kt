@@ -10,11 +10,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class DetectorState { IDLE, LISTENING, DETECTED }
+enum class DetectorState { IDLE, LISTENING }
+
+data class DetectionEntry(
+    val timestamp: String,
+    val starred: Boolean = false
+)
 
 data class UiState(
     val detectorState: DetectorState = DetectorState.IDLE,
-    val detectedTimestamp: String = "",
+    val lastDetectedTimestamp: String = "",
+    val detectionHistory: List<DetectionEntry> = emptyList(),
     val sensitivity: Float = 7f,
     val errorMessage: String? = null
 )
@@ -30,12 +36,11 @@ class GunShotViewModel : ViewModel() {
     init {
         detector.onDetected = { event ->
             val formatted = TimestampFormatter.format(event.wallMillis)
-            _uiState.value = _uiState.value.copy(
-                detectorState = DetectorState.DETECTED,
-                detectedTimestamp = formatted
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                lastDetectedTimestamp = formatted,
+                detectionHistory = listOf(DetectionEntry(formatted)) + current.detectionHistory
             )
-            detectionJob?.cancel()
-            detectionJob = null
         }
     }
 
@@ -45,7 +50,6 @@ class GunShotViewModel : ViewModel() {
         detector.sensitivityMultiplier = sliderToMultiplier(_uiState.value.sensitivity)
         _uiState.value = _uiState.value.copy(
             detectorState = DetectorState.LISTENING,
-            detectedTimestamp = "",
             errorMessage = null
         )
 
@@ -69,19 +73,26 @@ class GunShotViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(detectorState = DetectorState.IDLE)
     }
 
-    fun reset() {
-        detectionJob?.cancel()
-        detectionJob = null
-        _uiState.value = UiState(sensitivity = _uiState.value.sensitivity)
+    fun toggleStar(index: Int) {
+        val current = _uiState.value
+        if (index !in current.detectionHistory.indices) return
+        _uiState.value = current.copy(
+            detectionHistory = current.detectionHistory.mapIndexed { i, entry ->
+                if (i == index) entry.copy(starred = !entry.starred) else entry
+            }
+        )
+    }
+
+    fun clearHistory() {
+        _uiState.value = _uiState.value.copy(
+            lastDetectedTimestamp = "",
+            detectionHistory = emptyList()
+        )
     }
 
     fun setSensitivity(value: Float) {
         if (_uiState.value.detectorState == DetectorState.LISTENING) return
         _uiState.value = _uiState.value.copy(sensitivity = value)
-    }
-
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
     override fun onCleared() {

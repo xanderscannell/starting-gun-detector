@@ -101,7 +101,8 @@ private fun App(vm: GunShotViewModel = viewModel()) {
                 uiState = uiState,
                 onStartListening = vm::startListening,
                 onStopListening = vm::stopListening,
-                onReset = vm::reset,
+                onClearHistory = vm::clearHistory,
+                onToggleStar = vm::toggleStar,
                 onSensitivityChange = vm::setSensitivity,
                 modifier = Modifier.padding(innerPadding)
             )

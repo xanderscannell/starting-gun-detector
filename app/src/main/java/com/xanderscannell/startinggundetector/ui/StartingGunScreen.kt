@@ -7,17 +7,29 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,18 +57,17 @@ fun StartingGunScreen(
     uiState: UiState,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
-    onReset: () -> Unit,
+    onClearHistory: () -> Unit,
+    onToggleStar: (Int) -> Unit,
     onSensitivityChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var liveClock by remember { mutableStateOf("") }
 
-    LaunchedEffect(uiState.detectorState) {
-        if (uiState.detectorState != DetectorState.DETECTED) {
-            while (true) {
-                liveClock = TimestampFormatter.format(System.currentTimeMillis())
-                delay(100)
-            }
+    LaunchedEffect(Unit) {
+        while (true) {
+            liveClock = TimestampFormatter.format(System.currentTimeMillis())
+            delay(100)
         }
     }
 
@@ -64,103 +75,197 @@ fun StartingGunScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // ── Top ──────────────────────────────────────────────
+        // When there's no history, equal spacers above and below center the top content.
+        // Once history appears the leading spacer is removed and history fills the gap.
+        if (uiState.detectionHistory.isEmpty()) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
         Text(
             text = "Starting Gun Detector",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.secondary
         )
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (uiState.detectorState != DetectorState.DETECTED) {
-                AutoSizeText(
-                    text = liveClock,
-                    maxFontSize = 56.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Light,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.fillMaxWidth()
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AutoSizeText(
+            text = liveClock,
+            maxFontSize = 52.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Light,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        StatusLabel(
+            state = uiState.detectorState,
+            lastDetected = uiState.lastDetectedTimestamp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ── History (fills remaining space) ──────────────────
+        if (uiState.detectionHistory.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "History",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary
                 )
+                TextButton(onClick = onClearHistory) {
+                    Text("Clear", color = MaterialTheme.colorScheme.secondary)
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
 
-            StatusLabel(state = uiState.detectorState)
+            LazyColumn(
+                state = rememberLazyListState(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                itemsIndexed(uiState.detectionHistory) { index, entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "#${index + 1}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                        Text(
+                            text = entry.timestamp,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 20.sp,
+                            fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Normal,
+                            color = if (index == 0) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { onToggleStar(index) }) {
+                            Icon(
+                                imageVector = if (entry.starred) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                contentDescription = if (entry.starred) "Unstar" else "Star",
+                                tint = if (entry.starred) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                    if (index < uiState.detectionHistory.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))
+                    }
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+        }
 
-            if (uiState.detectorState == DetectorState.DETECTED) {
-                Spacer(modifier = Modifier.height(24.dp))
-                AutoSizeText(
-                    text = uiState.detectedTimestamp,
-                    maxFontSize = 64.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
+        // ── Bottom controls (always pinned) ──────────────────
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (uiState.errorMessage != null) {
+            Text(
+                text = uiState.errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Red,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Text(
+            text = "Sensitivity: ${uiState.sensitivity.toInt()}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Slider(
+            value = uiState.sensitivity,
+            onValueChange = onSensitivityChange,
+            valueRange = 1f..10f,
+            steps = 8,
+            enabled = uiState.detectorState == DetectorState.IDLE,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        when (uiState.detectorState) {
+            DetectorState.IDLE -> Button(
+                onClick = onStartListening,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("START LISTENING") }
+            DetectorState.LISTENING -> OutlinedButton(
+                onClick = onStopListening,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.secondary
+                )
+            ) { Text("STOP") }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Device audio latency may vary. Calibrate for best results.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun StatusLabel(state: DetectorState, lastDetected: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        when (state) {
+            DetectorState.IDLE -> Text(
+                text = "TAP TO LISTEN",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.secondary
+            )
+            DetectorState.LISTENING -> {
+                val transition = rememberInfiniteTransition(label = "pulse")
+                val alpha by transition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 0.2f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(700),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulseAlpha"
+                )
+                Text(
+                    text = "LISTENING...",
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.alpha(alpha)
                 )
             }
         }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (uiState.detectorState == DetectorState.IDLE) {
-                Text(
-                    text = "Sensitivity: ${uiState.sensitivity.toInt()}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Slider(
-                    value = uiState.sensitivity,
-                    onValueChange = onSensitivityChange,
-                    valueRange = 1f..10f,
-                    steps = 8,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            when (uiState.detectorState) {
-                DetectorState.IDLE -> {
-                    Button(onClick = onStartListening, modifier = Modifier.fillMaxWidth()) {
-                        Text("START LISTENING")
-                    }
-                }
-                DetectorState.LISTENING -> {
-                    OutlinedButton(
-                        onClick = onStopListening,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Text("STOP")
-                    }
-                }
-                DetectorState.DETECTED -> {
-                    Button(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
-                        Text("RESET")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
+        if (lastDetected.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Device audio latency may vary. Calibrate for best results.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary,
-                textAlign = TextAlign.Center
+                text = "Last: $lastDetected",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.secondary
             )
-
-            if (uiState.errorMessage != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = uiState.errorMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Red,
-                    textAlign = TextAlign.Center
-                )
-            }
         }
     }
 }
@@ -172,7 +277,7 @@ private fun AutoSizeText(
     modifier: Modifier = Modifier,
     fontFamily: FontFamily = FontFamily.Default,
     fontWeight: FontWeight = FontWeight.Normal,
-    color: androidx.compose.ui.graphics.Color = Color.Unspecified
+    color: Color = Color.Unspecified
 ) {
     var fontSize by remember(maxFontSize) { mutableStateOf(maxFontSize) }
 
@@ -193,38 +298,4 @@ private fun AutoSizeText(
             }
         }
     )
-}
-
-@Composable
-private fun StatusLabel(state: DetectorState) {
-    when (state) {
-        DetectorState.IDLE -> Text(
-            text = "TAP TO LISTEN",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.secondary
-        )
-        DetectorState.LISTENING -> {
-            val transition = rememberInfiniteTransition(label = "pulse")
-            val alpha by transition.animateFloat(
-                initialValue = 1f,
-                targetValue = 0.2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(700),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "pulseAlpha"
-            )
-            Text(
-                text = "LISTENING...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.alpha(alpha)
-            )
-        }
-        DetectorState.DETECTED -> Text(
-            text = "DETECTED",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
 }
