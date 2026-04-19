@@ -3,6 +3,7 @@ package com.xanderscannell.startinggundetector.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xanderscannell.startinggundetector.audio.AudioDetector
+import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,9 @@ enum class DetectorState { IDLE, LISTENING }
 
 data class DetectionEntry(
     val timestamp: String,
-    val starred: Boolean = false
+    val starred: Boolean = false,
+    val deviceId: String = "",
+    val isMine: Boolean = true
 )
 
 data class UiState(
@@ -22,37 +25,72 @@ data class UiState(
     val lastDetectedTimestamp: String = "",
     val detectionHistory: List<DetectionEntry> = emptyList(),
     val sensitivity: Float = 7f,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val sessionCode: String? = null,
+    val isInSession: Boolean = false,
+    val sessionLoading: Boolean = false,
+    val showSessionDialog: Boolean = false,
+    val sessionError: String? = null
 )
 
-class GunShotViewModel : ViewModel() {
+class GunShotViewModel(
+    private val deviceId: String,
+    private val sessionRepository: SessionRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val detector = AudioDetector()
     private var detectionJob: Job? = null
+    private var streamJob: Job? = null
+
+    // Starred state is kept locally so it survives Firestore stream re-emissions.
+    // Key format: "$deviceId:$timestamp"
+    private val starredKeys = mutableSetOf<String>()
 
     init {
         detector.onDetected = { event ->
             val formatted = TimestampFormatter.format(event.wallMillis)
             val current = _uiState.value
-            _uiState.value = current.copy(
-                lastDetectedTimestamp = formatted,
-                detectionHistory = listOf(DetectionEntry(formatted)) + current.detectionHistory
-            )
+
+            // "Last detected" always reflects this device's own detections only
+            _uiState.value = current.copy(lastDetectedTimestamp = formatted)
+
+            if (current.isInSession && current.sessionCode != null) {
+                // Session mode: write to Firestore; the stream listener owns the history list
+                viewModelScope.launch {
+                    try {
+                        sessionRepository.writeDetection(current.sessionCode, formatted)
+                    } catch (e: Exception) {
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Failed to sync detection"
+                        )
+                    }
+                }
+            } else {
+                // Solo mode: update history locally
+                val entry = DetectionEntry(
+                    timestamp = formatted,
+                    deviceId = deviceId,
+                    isMine = true
+                )
+                _uiState.value = _uiState.value.copy(
+                    detectionHistory = listOf(entry) + _uiState.value.detectionHistory
+                )
+            }
         }
     }
 
+    // ── Listening ────────────────────────────────────────────
+
     fun startListening() {
         if (_uiState.value.detectorState != DetectorState.IDLE) return
-
         detector.sensitivityMultiplier = sliderToMultiplier(_uiState.value.sensitivity)
         _uiState.value = _uiState.value.copy(
             detectorState = DetectorState.LISTENING,
             errorMessage = null
         )
-
         detectionJob = viewModelScope.launch {
             try {
                 detector.run()
@@ -73,17 +111,119 @@ class GunShotViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(detectorState = DetectorState.IDLE)
     }
 
+    // ── Session ──────────────────────────────────────────────
+
+    fun showSessionDialog() {
+        _uiState.value = _uiState.value.copy(showSessionDialog = true, sessionError = null)
+    }
+
+    fun dismissSessionDialog() {
+        _uiState.value = _uiState.value.copy(showSessionDialog = false, sessionError = null)
+    }
+
+    fun createSession() {
+        _uiState.value = _uiState.value.copy(sessionLoading = true, sessionError = null)
+        viewModelScope.launch {
+            try {
+                val code = sessionRepository.createSession()
+                _uiState.value = _uiState.value.copy(
+                    sessionCode = code,
+                    isInSession = true,
+                    sessionLoading = false,
+                    showSessionDialog = false,
+                    detectionHistory = emptyList()
+                )
+                startStream(code)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    sessionLoading = false,
+                    sessionError = "Failed to create session"
+                )
+            }
+        }
+    }
+
+    fun joinSession(code: String) {
+        val upperCode = code.trim().uppercase()
+        if (upperCode.length != 4) {
+            _uiState.value = _uiState.value.copy(sessionError = "Code must be 4 characters")
+            return
+        }
+        _uiState.value = _uiState.value.copy(sessionLoading = true, sessionError = null)
+        viewModelScope.launch {
+            try {
+                val exists = sessionRepository.joinSession(upperCode)
+                if (exists) {
+                    _uiState.value = _uiState.value.copy(
+                        sessionCode = upperCode,
+                        isInSession = true,
+                        sessionLoading = false,
+                        showSessionDialog = false,
+                        detectionHistory = emptyList()
+                    )
+                    startStream(upperCode)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        sessionLoading = false,
+                        sessionError = "Session \"$upperCode\" not found"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    sessionLoading = false,
+                    sessionError = "Failed to join session"
+                )
+            }
+        }
+    }
+
+    fun leaveSession() {
+        streamJob?.cancel()
+        streamJob = null
+        starredKeys.clear()
+        _uiState.value = _uiState.value.copy(
+            sessionCode = null,
+            isInSession = false,
+            detectionHistory = emptyList(),
+            lastDetectedTimestamp = ""
+        )
+    }
+
+    private fun startStream(sessionCode: String) {
+        streamJob?.cancel()
+        streamJob = viewModelScope.launch {
+            sessionRepository.streamDetections(sessionCode).collect { detections ->
+                val mapped = detections.map { fd ->
+                    val key = "${fd.deviceId}:${fd.timestamp}"
+                    DetectionEntry(
+                        timestamp = fd.timestamp,
+                        starred = key in starredKeys,
+                        deviceId = fd.deviceId,
+                        isMine = fd.deviceId == deviceId
+                    )
+                }
+                _uiState.value = _uiState.value.copy(detectionHistory = mapped)
+            }
+        }
+    }
+
+    // ── History ──────────────────────────────────────────────
+
     fun toggleStar(index: Int) {
         val current = _uiState.value
         if (index !in current.detectionHistory.indices) return
+        val entry = current.detectionHistory[index]
+        val key = "${entry.deviceId}:${entry.timestamp}"
+        if (entry.starred) starredKeys.remove(key) else starredKeys.add(key)
         _uiState.value = current.copy(
-            detectionHistory = current.detectionHistory.mapIndexed { i, entry ->
-                if (i == index) entry.copy(starred = !entry.starred) else entry
+            detectionHistory = current.detectionHistory.mapIndexed { i, e ->
+                if (i == index) e.copy(starred = !e.starred) else e
             }
         )
     }
 
     fun clearHistory() {
+        starredKeys.clear()
         _uiState.value = _uiState.value.copy(
             lastDetectedTimestamp = "",
             detectionHistory = emptyList()
@@ -98,13 +238,11 @@ class GunShotViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         detectionJob?.cancel()
+        streamJob?.cancel()
     }
 
-    // Slider 1–10: higher slider = more sensitive = lower multiplier threshold
-    // Slider 10 → multiplier 4x (triggers easily)
-    // Slider 1  → multiplier 20x (requires very loud sound)
     private fun sliderToMultiplier(slider: Float): Float {
-        val normalized = (slider - 1f) / 9f  // 0..1
-        return 20f - (normalized * 16f)       // 20..4
+        val normalized = (slider - 1f) / 9f
+        return 20f - (normalized * 16f)
     }
 }

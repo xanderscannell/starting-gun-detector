@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -35,9 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xanderscannell.startinggundetector.device.DeviceIdProvider
+import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.ui.StartingGunScreen
 import com.xanderscannell.startinggundetector.ui.theme.StartingGunTheme
 import com.xanderscannell.startinggundetector.viewmodel.GunShotViewModel
+import com.xanderscannell.startinggundetector.viewmodel.GunShotViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,9 +59,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App(vm: GunShotViewModel = viewModel()) {
-    val uiState by vm.uiState.collectAsState()
+private fun App() {
     val context = LocalContext.current
+    val deviceId = remember { DeviceIdProvider.getDeviceId(context) }
+    val sessionRepository = remember { SessionRepository(deviceId) }
+    val vm: GunShotViewModel = viewModel(
+        factory = GunShotViewModelFactory(deviceId, sessionRepository)
+    )
+    val uiState by vm.uiState.collectAsState()
 
     var permissionGranted by remember { mutableStateOf(false) }
     var showRationale by remember { mutableStateOf(false) }
@@ -104,6 +111,11 @@ private fun App(vm: GunShotViewModel = viewModel()) {
                 onClearHistory = vm::clearHistory,
                 onToggleStar = vm::toggleStar,
                 onSensitivityChange = vm::setSensitivity,
+                onShowSessionDialog = vm::showSessionDialog,
+                onDismissSessionDialog = vm::dismissSessionDialog,
+                onCreateSession = vm::createSession,
+                onJoinSession = vm::joinSession,
+                onLeaveSession = vm::leaveSession,
                 modifier = Modifier.padding(innerPadding)
             )
         }
