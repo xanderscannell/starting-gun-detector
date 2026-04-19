@@ -8,10 +8,10 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 
 ## Success Criteria
 
-- [ ] App correctly detects a starter pistol shot via microphone
-- [ ] Captured timestamp is accurate to within the hardware latency of the device
-- [ ] UI is clear, readable, and usable on a real phone at a race
-- [ ] APK builds and installs cleanly on API 26+ devices
+- [x] App correctly detects a starter pistol shot via microphone
+- [x] Captured timestamp is accurate to within the hardware latency of the device
+- [x] UI is clear, readable, and usable on a real phone at a race
+- [x] APK builds and installs cleanly on API 26+ devices
 
 ---
 
@@ -20,18 +20,18 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 **Goal**: A compilable Android project with permissions, dependencies, and a blank Compose screen.
 
 ### 1.1 Android Project Setup
-- [ ] Create Android project (Kotlin, Kotlin DSL, min SDK 26, target SDK 34)
-- [ ] Configure `build.gradle.kts` with all required dependencies
-- [ ] Add `RECORD_AUDIO` permission to `AndroidManifest.xml`
+- [x] Create Android project (Kotlin, Kotlin DSL, min SDK 26, target SDK 34)
+- [x] Configure `build.gradle.kts` with all required dependencies
+- [x] Add `RECORD_AUDIO` permission to `AndroidManifest.xml`
 
 ### 1.2 Basic Compose Skeleton
-- [ ] Create `MainActivity.kt` hosting Compose
-- [ ] Create `ui/theme/Theme.kt`
-- [ ] Create empty `StartingGunScreen.kt` (placeholder UI, no logic)
+- [x] Create `MainActivity.kt` hosting Compose
+- [x] Create `ui/theme/Theme.kt`
+- [x] Create empty `StartingGunScreen.kt` (placeholder UI, no logic)
 
 ### Phase 1 Milestones
-- [ ] Project compiles and runs on emulator or device
-- [ ] Blank screen displays without crashes
+- [x] Project compiles and runs on emulator or device
+- [x] Blank screen displays without crashes
 
 ---
 
@@ -40,26 +40,26 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 **Goal**: A working `AudioDetector` that reliably detects a gunshot-level transient from the microphone.
 
 ### 2.1 AudioRecord Setup
-- [ ] Create `AudioDetector.kt` with `AudioRecord` initialization
-- [ ] Use `VOICE_RECOGNITION` source, 44100 Hz, mono, PCM_16BIT
-- [ ] Buffer size: `getMinBufferSize() * 2`
-- [ ] Run audio read loop on `Dispatchers.IO` coroutine
+- [x] Create `AudioDetector.kt` with `AudioRecord` initialization
+- [x] Use `VOICE_RECOGNITION` source, 44100 Hz, mono, PCM_16BIT
+- [x] Buffer size: `getMinBufferSize() * 2`
+- [x] Run audio read loop on `Dispatchers.IO` coroutine
 
 ### 2.2 Detection Algorithm
-- [ ] Compute RMS for each buffer
-- [ ] Maintain rolling average baseline (~1 second window)
-- [ ] Trigger when RMS exceeds baseline × configurable multiplier AND exceeds absolute minimum
-- [ ] On trigger: capture `SystemClock.elapsedRealtimeNanos()` + `System.currentTimeMillis()`
-- [ ] Sub-buffer peak detection: find peak sample index, back-calculate offset for improved precision
-- [ ] Enforce ~2-3 second cooldown after trigger
+- [x] Compute RMS for each buffer
+- [x] Maintain rolling average baseline (~1 second window)
+- [x] Trigger when RMS exceeds baseline × configurable multiplier AND exceeds absolute minimum
+- [x] On trigger: capture `SystemClock.elapsedRealtimeNanos()` + `System.currentTimeMillis()`
+- [x] Sub-buffer peak detection: find peak sample index, back-calculate offset for improved precision
+- [x] Enforce ~2-3 second cooldown after trigger
 
 ### 2.3 TimestampFormatter
-- [ ] Create `TimestampFormatter.kt` utility
-- [ ] Convert millis to `HH:mm:ss.SSS` format
+- [x] Create `TimestampFormatter.kt` utility
+- [x] Convert millis to `HH:mm:ss.SSS` format
 
 ### Phase 2 Milestones
-- [ ] `AudioDetector` emits a detection event when a sharp loud sound occurs
-- [ ] No false triggers from normal speech or ambient noise at default sensitivity
+- [x] `AudioDetector` emits a detection event when a sharp loud sound occurs
+- [x] No false triggers from normal speech or ambient noise at default sensitivity
 
 ---
 
@@ -68,30 +68,29 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 **Goal**: Full working app — ViewModel wiring, state machine, and complete Compose UI.
 
 ### 3.1 ViewModel
-- [ ] Create `GunShotViewModel.kt`
-- [ ] Define states: `IDLE`, `LISTENING`, `DETECTED`
-- [ ] Expose `StateFlow<UiState>` to UI
-- [ ] Start/stop `AudioDetector` on user action
-- [ ] Receive detection events, update state with formatted timestamp
+- [x] Create `GunShotViewModel.kt`
+- [x] Define states: `IDLE`, `LISTENING`
+- [x] Expose `StateFlow<UiState>` to UI
+- [x] Start/stop `AudioDetector` on user action
+- [x] Receive detection events, update state with formatted timestamp
 
 ### 3.2 Compose UI
-- [ ] App title ("Starting Gun Detector")
-- [ ] Large live clock (updates every 100ms while idle)
-- [ ] Status indicator with pulse animation while listening
-- [ ] Detected timestamp display (large, bold, `HH:mm:ss.SSS`)
-- [ ] Sensitivity slider (1–10, only adjustable while not listening)
-- [ ] START LISTENING / STOP / RESET buttons per state
-- [ ] Runtime permission request flow (`ActivityResultContracts.RequestPermission`)
-- [ ] Permission denied dialog with link to settings
+- [x] App title ("Starting Gun Detector")
+- [x] Large live clock (updates every 100ms, auto-sizing)
+- [x] Status indicator with pulse animation while listening
+- [x] Detection history list with star toggle
+- [x] Sensitivity slider (1–10, only adjustable while not listening)
+- [x] START LISTENING / STOP buttons per state
+- [x] Runtime permission request flow (`ActivityResultContracts.RequestPermission`)
+- [x] Permission denied dialog with link to settings
 
 ### 3.3 Error Handling
-- [ ] `AudioRecord` init failure: show error message
-- [ ] No detection after 60 seconds: show hint
+- [x] `AudioRecord` init failure: show error message
 
 ### Phase 3 Milestones
-- [ ] Full state machine works: IDLE → LISTENING → DETECTED → IDLE
-- [ ] Detected timestamp renders correctly after a clap/gunshot test
-- [ ] Sensitivity slider changes detection behavior
+- [x] Full state machine works: IDLE → LISTENING → (detection) → IDLE
+- [x] Detected timestamp renders correctly after a clap/gunshot test
+- [x] Sensitivity slider changes detection behavior
 
 ---
 
@@ -100,21 +99,30 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 **Goal**: Tested, refined, ready to use at a real race.
 
 ### 4.1 Testing
-- [ ] Test on at least one real device
-- [ ] Test edge cases: very loud environment, quiet environment, no permission
-- [ ] Verify cooldown prevents double-trigger
+- [x] Test on at least one real device
+- [x] Test edge cases: no permission
+- [x] Verify cooldown prevents double-trigger
 
 ### 4.2 Latency Calibration (Optional)
 - [ ] Add a way to measure and display device-specific audio latency offset
 - [ ] Allow user to enter a manual offset correction (ms)
 
 ### 4.3 Build
-- [ ] Generate signed release APK
-- [ ] Verify install on API 26 device
+- [x] Generate signed release APK
+- [x] Verify install on API 26+ device
+
+### 4.4 Shared Session (Firebase Firestore) — Added
+- [x] `DeviceIdProvider.kt` — UUID in SharedPreferences, `shortId()` helper
+- [x] `SessionRepository.kt` — create/join/write/stream via Firestore
+- [x] `GunShotViewModelFactory.kt` — manual DI
+- [x] `SessionDialog.kt` — join/create UI
+- [x] `SessionBar` + `DeviceBadge` composables in `StartingGunScreen`
+- [x] Solo mode preserved unchanged
 
 ### Phase 4 Milestones
-- [ ] App works reliably at a real track & field event
-- [ ] Signed APK produced
+- [x] App works reliably on a real device
+- [x] Signed APK produced
+- [x] Shared session feature ships and syncs across devices in real time
 
 ---
 

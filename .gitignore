@@ -6,3 +6,4 @@ app/build/
 *.iml
 captures/
 app/google-services.json
+app/release/

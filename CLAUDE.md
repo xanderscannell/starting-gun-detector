@@ -36,9 +36,13 @@ Before the session ends:
 
 ## Current Focus
 
-**Phase**: Phase 1 — Project Scaffold
-**Working on**: Android project setup not yet started
-**Key constraint**: Millisecond timing accuracy — timestamp must be captured at buffer receipt, with sub-buffer peak detection for best precision
+**Phase**: All phases complete — app shipped to testers
+**Last commit**: `feat: shared session via Firebase Firestore` (2026-04-19)
+**Next priorities** (if returning):
+- Firestore security rules (restrict writes to session members)
+- Manual latency offset entry (Phase 4.2)
+- Session expiry / cleanup
+- UI polish for wider distribution
 
 ## Reference
 
