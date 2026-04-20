@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## v1.2.0 — 2026-04-20
 
 ### Fixed
 - Buffer offset calculation was inverted — timestamp was computed relative to the start of the buffer rather than the end, causing timestamps to be reported up to one full buffer duration too early (~40ms systematic error)
