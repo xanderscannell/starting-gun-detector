@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xanderscannell.startinggundetector.device.DeviceIdProvider
+import com.xanderscannell.startinggundetector.device.UserPreferences
 import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.ui.StartingGunScreen
 import com.xanderscannell.startinggundetector.ui.theme.StartingGunTheme
@@ -63,8 +64,9 @@ private fun App() {
     val context = LocalContext.current
     val deviceId = remember { DeviceIdProvider.getDeviceId(context) }
     val sessionRepository = remember { SessionRepository(deviceId) }
+    val userPreferences = remember { UserPreferences(context) }
     val vm: GunShotViewModel = viewModel(
-        factory = GunShotViewModelFactory(deviceId, sessionRepository)
+        factory = GunShotViewModelFactory(deviceId, sessionRepository, userPreferences)
     )
     val uiState by vm.uiState.collectAsState()
 
@@ -111,6 +113,8 @@ private fun App() {
                 onClearHistory = vm::clearHistory,
                 onToggleStar = vm::toggleStar,
                 onSensitivityChange = vm::setSensitivity,
+                onLatencyOffsetChange = vm::setLatencyOffset,
+                onUsernameChange = vm::setUsername,
                 onShowSessionDialog = vm::showSessionDialog,
                 onDismissSessionDialog = vm::dismissSessionDialog,
                 onCreateSession = vm::createSession,

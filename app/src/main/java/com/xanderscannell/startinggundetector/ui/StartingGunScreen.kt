@@ -20,15 +20,19 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import com.xanderscannell.startinggundetector.viewmodel.DetectorState
 import com.xanderscannell.startinggundetector.viewmodel.UiState
@@ -64,6 +67,8 @@ fun StartingGunScreen(
     onClearHistory: () -> Unit,
     onToggleStar: (Int) -> Unit,
     onSensitivityChange: (Float) -> Unit,
+    onLatencyOffsetChange: (Int) -> Unit,
+    onUsernameChange: (String) -> Unit,
     onShowSessionDialog: () -> Unit,
     onDismissSessionDialog: () -> Unit,
     onCreateSession: () -> Unit,
@@ -180,9 +185,9 @@ fun StartingGunScreen(
                         )
 
                         // Device badge — only shown in session mode
-                        if (uiState.isInSession && entry.deviceId.isNotEmpty()) {
+                        if (uiState.isInSession && entry.displayName.isNotEmpty()) {
                             DeviceBadge(
-                                shortId = DeviceIdProvider.shortId(entry.deviceId),
+                                label = entry.displayName,
                                 isMine = entry.isMine,
                                 modifier = Modifier.padding(end = 8.dp)
                             )
@@ -246,6 +251,25 @@ fun StartingGunScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(modifier = Modifier.height(4.dp))
+
+        LatencyOffsetControl(
+            offsetMs = uiState.latencyOffsetMs,
+            onOffsetChange = onLatencyOffsetChange
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = uiState.username,
+            onValueChange = onUsernameChange,
+            label = { Text("Your name (shown in sessions)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         when (uiState.detectorState) {
             DetectorState.IDLE -> Button(
                 onClick = onStartListening,
@@ -260,14 +284,6 @@ fun StartingGunScreen(
             ) { Text("STOP") }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "Device audio latency may vary. Calibrate for best results.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center
-        )
     }
 }
 
@@ -313,14 +329,14 @@ private fun SessionBar(
 }
 
 @Composable
-private fun DeviceBadge(shortId: String, isMine: Boolean, modifier: Modifier = Modifier) {
+private fun DeviceBadge(label: String, isMine: Boolean, modifier: Modifier = Modifier) {
     val bg = if (isMine) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
              else MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
     val fg = if (isMine) MaterialTheme.colorScheme.primary
              else MaterialTheme.colorScheme.secondary
 
     Text(
-        text = shortId,
+        text = label,
         fontFamily = FontFamily.Monospace,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
@@ -368,6 +384,37 @@ private fun StatusLabel(state: DetectorState, lastDetected: String) {
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.secondary
             )
+        }
+    }
+}
+
+@Composable
+private fun LatencyOffsetControl(
+    offsetMs: Int,
+    onOffsetChange: (Int) -> Unit
+) {
+    val label = when {
+        offsetMs > 0 -> "+${offsetMs}ms"
+        offsetMs < 0 -> "${offsetMs}ms"
+        else -> "0ms"
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Latency offset: $label",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalIconButton(onClick = { onOffsetChange(offsetMs - 10) }) {
+                Icon(Icons.Filled.Remove, contentDescription = "Decrease offset")
+            }
+            FilledTonalIconButton(onClick = { onOffsetChange(offsetMs + 10) }) {
+                Icon(Icons.Filled.Add, contentDescription = "Increase offset")
+            }
         }
     }
 }

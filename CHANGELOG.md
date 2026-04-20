@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Buffer offset calculation was inverted — timestamp was computed relative to the start of the buffer rather than the end, causing timestamps to be reported up to one full buffer duration too early (~40ms systematic error)
+
+### Added
+- Manual latency offset control (±500ms, 10ms steps) to compensate for device hardware input latency
+- Persistent username setting — shown as the session badge label instead of the short device ID
+- Latency offset and username are both persisted across app restarts via SharedPreferences
+
+### Changed
+- Session detection badges now show the sender's username instead of their short device ID; falls back to short ID if no name is set (also backwards-compatible with old Firestore documents that lack a display name)
+
+---
+
 ## v1.1.0 — 2026-04-19
 
 ### Fixed

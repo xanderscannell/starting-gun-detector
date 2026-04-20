@@ -3,6 +3,7 @@ package com.xanderscannell.startinggundetector.session
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.tasks.await
 data class FirestoreDetection(
     val timestamp: String,
     val deviceId: String,
+    val displayName: String,
     val clientTimestamp: Long
 )
 
@@ -44,13 +46,14 @@ class SessionRepository(private val deviceId: String) {
         return db.collection("sessions").document(code.uppercase()).get().await().exists()
     }
 
-    suspend fun writeDetection(sessionCode: String, timestamp: String) {
+    suspend fun writeDetection(sessionCode: String, timestamp: String, displayName: String) {
         db.collection("sessions").document(sessionCode)
             .collection("detections")
             .add(
                 mapOf(
                     "timestamp" to timestamp,
                     "deviceId" to deviceId,
+                    "displayName" to displayName,
                     "clientTimestamp" to System.currentTimeMillis(),
                     "createdAt" to FieldValue.serverTimestamp()
                 )
@@ -66,8 +69,10 @@ class SessionRepository(private val deviceId: String) {
                 val detections = snapshot.documents.mapNotNull { doc ->
                     val timestamp = doc.getString("timestamp") ?: return@mapNotNull null
                     val docDeviceId = doc.getString("deviceId") ?: return@mapNotNull null
+                    val displayName = doc.getString("displayName")
+                        ?: DeviceIdProvider.shortId(docDeviceId)
                     val clientTimestamp = doc.getLong("clientTimestamp") ?: 0L
-                    FirestoreDetection(timestamp, docDeviceId, clientTimestamp)
+                    FirestoreDetection(timestamp, docDeviceId, displayName, clientTimestamp)
                 }
                 trySend(detections)
             }

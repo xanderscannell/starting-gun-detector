@@ -3,6 +3,8 @@ package com.xanderscannell.startinggundetector.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xanderscannell.startinggundetector.audio.AudioDetector
+import com.xanderscannell.startinggundetector.device.DeviceIdProvider
+import com.xanderscannell.startinggundetector.device.UserPreferences
 import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import kotlinx.coroutines.Job
@@ -17,6 +19,7 @@ data class DetectionEntry(
     val timestamp: String,
     val starred: Boolean = false,
     val deviceId: String = "",
+    val displayName: String = "",
     val isMine: Boolean = true
 )
 
@@ -25,6 +28,8 @@ data class UiState(
     val lastDetectedTimestamp: String = "",
     val detectionHistory: List<DetectionEntry> = emptyList(),
     val sensitivity: Float = 7f,
+    val latencyOffsetMs: Int = 0,
+    val username: String = "",
     val errorMessage: String? = null,
     val sessionCode: String? = null,
     val isInSession: Boolean = false,
@@ -35,10 +40,16 @@ data class UiState(
 
 class GunShotViewModel(
     private val deviceId: String,
-    private val sessionRepository: SessionRepository
+    private val sessionRepository: SessionRepository,
+    private val userPreferences: UserPreferences
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(
+        UiState(
+            latencyOffsetMs = userPreferences.latencyOffsetMs,
+            username = userPreferences.username
+        )
+    )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val detector = AudioDetector()
@@ -51,7 +62,8 @@ class GunShotViewModel(
 
     init {
         detector.onDetected = { event ->
-            val formatted = TimestampFormatter.format(event.wallMillis)
+            val adjusted = event.wallMillis + _uiState.value.latencyOffsetMs
+            val formatted = TimestampFormatter.format(adjusted)
             val current = _uiState.value
 
             // "Last detected" always reflects this device's own detections only
@@ -59,9 +71,10 @@ class GunShotViewModel(
 
             if (current.isInSession && current.sessionCode != null) {
                 // Session mode: write to Firestore; the stream listener owns the history list
+                val displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
                 viewModelScope.launch {
                     try {
-                        sessionRepository.writeDetection(current.sessionCode, formatted)
+                        sessionRepository.writeDetection(current.sessionCode, formatted, displayName)
                     } catch (e: Exception) {
                         _uiState.value = _uiState.value.copy(
                             errorMessage = "Failed to sync detection"
@@ -73,6 +86,7 @@ class GunShotViewModel(
                 val entry = DetectionEntry(
                     timestamp = formatted,
                     deviceId = deviceId,
+                    displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) },
                     isMine = true
                 )
                 _uiState.value = _uiState.value.copy(
@@ -199,6 +213,7 @@ class GunShotViewModel(
                         timestamp = fd.timestamp,
                         starred = key in starredKeys,
                         deviceId = fd.deviceId,
+                        displayName = fd.displayName,
                         isMine = fd.deviceId == deviceId
                     )
                 }
@@ -233,6 +248,17 @@ class GunShotViewModel(
     fun setSensitivity(value: Float) {
         if (_uiState.value.detectorState == DetectorState.LISTENING) return
         _uiState.value = _uiState.value.copy(sensitivity = value)
+    }
+
+    fun setLatencyOffset(ms: Int) {
+        val clamped = ms.coerceIn(-500, 500)
+        userPreferences.latencyOffsetMs = clamped
+        _uiState.value = _uiState.value.copy(latencyOffsetMs = clamped)
+    }
+
+    fun setUsername(name: String) {
+        userPreferences.username = name
+        _uiState.value = _uiState.value.copy(username = name)
     }
 
     override fun onCleared() {

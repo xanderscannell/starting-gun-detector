@@ -106,7 +106,9 @@ class AudioDetector {
                 ) {
                     // Capture timestamp at the spike now, before confirmation delay
                     val peakIndex = findPeakIndex(buffer, read)
-                    val bufferOffsetMs = (peakIndex.toLong() * 1000L) / SAMPLE_RATE
+                    // Offset is samples from peak to end of buffer — read() returns when the
+                    // last sample is captured, so we subtract the tail, not the head.
+                    val bufferOffsetMs = ((read - 1 - peakIndex).toLong() * 1000L) / SAMPLE_RATE
                     val capturedNanos = SystemClock.elapsedRealtimeNanos()
                     val capturedMillis = now - bufferOffsetMs
 
