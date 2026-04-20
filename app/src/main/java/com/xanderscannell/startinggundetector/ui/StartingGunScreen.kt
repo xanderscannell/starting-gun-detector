@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -86,6 +87,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xanderscannell.startinggundetector.session.SessionMember
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import com.xanderscannell.startinggundetector.viewmodel.DetectorState
 import com.xanderscannell.startinggundetector.viewmodel.UiState
@@ -668,30 +670,66 @@ private fun SessionPage(
                 }
             }
 
-            if (uiState.detectionHistory.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
+            // Build last-detection lookup: deviceId -> most recent timestamp
+            // History is ordered descending so the first match per device is the latest
+            val lastDetectionByDevice = uiState.detectionHistory
+                .groupBy { it.deviceId }
+                .mapValues { (_, entries) -> entries.first().timestamp }
+
+            // Sort: this device first, then alphabetically
+            val members = uiState.sessionMembers
+                .sortedWith(compareByDescending<SessionMember> { it.isMine }.thenBy { it.displayName })
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Devices: ${members.size}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
+
+            if (members.isEmpty()) {
                 Text(
-                    text = "Detections",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.secondary
+                    text = "Waiting for devices…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(vertical = 12.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
-                uiState.detectionHistory.forEach { entry ->
+            } else {
+                members.forEach { member ->
+                    val lastDetected = lastDetectionByDevice[member.deviceId]
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DeviceBadge(label = entry.displayName, isMine = entry.isMine)
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (member.isListening) Color(0xFF4CAF50)
+                                    else MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
+                                )
+                        )
                         Text(
-                            text = entry.timestamp,
+                            text = member.displayName.ifBlank { "Unknown" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (member.isMine) FontWeight.Bold else FontWeight.Normal,
+                            color = if (member.isMine) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = lastDetected ?: "—",
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 16.sp,
-                            color = if (entry.isMine) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onBackground
+                            fontSize = 15.sp,
+                            color = if (member.isMine) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))

@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.0 — 2026-04-20
+
+### Changed
+- Session page members list replaces the raw detection history — shows one row per device with their name on the left and last detected time on the right
+- Devices appear in the session list as soon as they join, even before making a detection (previously a device was invisible until it fired)
+- "Devices: N" header shows the live count of connected devices
+
+### Added
+- Live listening status indicator — a green dot appears next to a device's name while they are actively listening; turns grey when they stop
+- Listening status is written to Firestore on start/stop/leave so all connected devices see it in real time
+- Your own device is always sorted to the top of the members list and shown in the primary colour
+
+---
+
 ## v1.2.0 — 2026-04-20
 
 ### Fixed

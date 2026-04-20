@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.xanderscannell.startinggundetector.audio.AudioDetector
 import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import com.xanderscannell.startinggundetector.device.UserPreferences
+import com.xanderscannell.startinggundetector.session.SessionMember
 import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import kotlinx.coroutines.Job
@@ -38,7 +39,8 @@ data class UiState(
     val sessionLoading: Boolean = false,
     val showSessionDialog: Boolean = false,
     val sessionError: String? = null,
-    val waveformBars: List<WaveformBar> = emptyList()
+    val waveformBars: List<WaveformBar> = emptyList(),
+    val sessionMembers: List<SessionMember> = emptyList()
 )
 
 class GunShotViewModel(
@@ -58,6 +60,7 @@ class GunShotViewModel(
     private val detector = AudioDetector()
     private var detectionJob: Job? = null
     private var streamJob: Job? = null
+    private var membersJob: Job? = null
     private var waveformIdleJob: Job? = null
 
     companion object {
@@ -145,6 +148,12 @@ class GunShotViewModel(
             detectorState = DetectorState.LISTENING,
             errorMessage = null
         )
+        val sessionCode = _uiState.value.sessionCode
+        if (sessionCode != null) {
+            viewModelScope.launch {
+                try { sessionRepository.updateListeningStatus(sessionCode, true) } catch (_: Exception) {}
+            }
+        }
         detectionJob = viewModelScope.launch {
             try {
                 detector.run()
@@ -164,6 +173,12 @@ class GunShotViewModel(
         detectionJob?.cancel()
         detectionJob = null
         _uiState.value = _uiState.value.copy(detectorState = DetectorState.IDLE)
+        val sessionCode = _uiState.value.sessionCode
+        if (sessionCode != null) {
+            viewModelScope.launch {
+                try { sessionRepository.updateListeningStatus(sessionCode, false) } catch (_: Exception) {}
+            }
+        }
         startIdleWaveform()
     }
 
@@ -182,6 +197,8 @@ class GunShotViewModel(
         viewModelScope.launch {
             try {
                 val code = sessionRepository.createSession()
+                val displayName = _uiState.value.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                sessionRepository.writeMember(code, displayName)
                 _uiState.value = _uiState.value.copy(
                     sessionCode = code,
                     isInSession = true,
@@ -210,6 +227,8 @@ class GunShotViewModel(
             try {
                 val exists = sessionRepository.joinSession(upperCode)
                 if (exists) {
+                    val displayName = _uiState.value.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                    sessionRepository.writeMember(upperCode, displayName)
                     _uiState.value = _uiState.value.copy(
                         sessionCode = upperCode,
                         isInSession = true,
@@ -234,13 +253,22 @@ class GunShotViewModel(
     }
 
     fun leaveSession() {
+        val sessionCode = _uiState.value.sessionCode
+        if (sessionCode != null) {
+            viewModelScope.launch {
+                try { sessionRepository.updateListeningStatus(sessionCode, false) } catch (_: Exception) {}
+            }
+        }
         streamJob?.cancel()
         streamJob = null
+        membersJob?.cancel()
+        membersJob = null
         starredKeys.clear()
         _uiState.value = _uiState.value.copy(
             sessionCode = null,
             isInSession = false,
             detectionHistory = emptyList(),
+            sessionMembers = emptyList(),
             lastDetectedTimestamp = ""
         )
     }
@@ -260,6 +288,14 @@ class GunShotViewModel(
                     )
                 }
                 _uiState.value = _uiState.value.copy(detectionHistory = mapped)
+            }
+        }
+
+        membersJob?.cancel()
+        membersJob = viewModelScope.launch {
+            sessionRepository.streamMembers(sessionCode).collect { members ->
+                val mapped = members.map { it.copy(isMine = it.deviceId == deviceId) }
+                _uiState.value = _uiState.value.copy(sessionMembers = mapped)
             }
         }
     }
@@ -307,6 +343,7 @@ class GunShotViewModel(
         super.onCleared()
         detectionJob?.cancel()
         streamJob?.cancel()
+        membersJob?.cancel()
         waveformIdleJob?.cancel()
     }
 

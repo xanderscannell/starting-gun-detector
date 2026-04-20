@@ -16,6 +16,13 @@ data class FirestoreDetection(
     val clientTimestamp: Long
 )
 
+data class SessionMember(
+    val deviceId: String,
+    val displayName: String,
+    val isListening: Boolean = false,
+    val isMine: Boolean = false
+)
+
 class SessionRepository(private val deviceId: String) {
 
     private val db = FirebaseFirestore.getInstance()
@@ -58,6 +65,41 @@ class SessionRepository(private val deviceId: String) {
                     "createdAt" to FieldValue.serverTimestamp()
                 )
             ).await()
+    }
+
+    suspend fun writeMember(sessionCode: String, displayName: String) {
+        db.collection("sessions").document(sessionCode)
+            .collection("members").document(deviceId)
+            .set(
+                mapOf(
+                    "displayName" to displayName,
+                    "joinedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+    }
+
+    suspend fun updateListeningStatus(sessionCode: String, isListening: Boolean) {
+        db.collection("sessions").document(sessionCode)
+            .collection("members").document(deviceId)
+            .set(
+                mapOf("listening" to isListening),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).await()
+    }
+
+    fun streamMembers(sessionCode: String): Flow<List<SessionMember>> = callbackFlow {
+        val listener = db.collection("sessions").document(sessionCode)
+            .collection("members")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val members = snapshot.documents.mapNotNull { doc ->
+                    val displayName = doc.getString("displayName") ?: return@mapNotNull null
+                    val isListening = doc.getBoolean("listening") ?: false
+                    SessionMember(doc.id, displayName, isListening)
+                }
+                trySend(members)
+            }
+        awaitClose { listener.remove() }
     }
 
     fun streamDetections(sessionCode: String): Flow<List<FirestoreDetection>> = callbackFlow {
