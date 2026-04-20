@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 
 enum class DetectorState { IDLE, LISTENING }
 
+data class WaveformBar(val normalizedRms: Float, val isDetection: Boolean = false)
+
 data class DetectionEntry(
     val timestamp: String,
     val starred: Boolean = false,
@@ -35,7 +37,8 @@ data class UiState(
     val isInSession: Boolean = false,
     val sessionLoading: Boolean = false,
     val showSessionDialog: Boolean = false,
-    val sessionError: String? = null
+    val sessionError: String? = null,
+    val waveformBars: List<WaveformBar> = emptyList()
 )
 
 class GunShotViewModel(
@@ -55,19 +58,38 @@ class GunShotViewModel(
     private val detector = AudioDetector()
     private var detectionJob: Job? = null
     private var streamJob: Job? = null
+    private var waveformIdleJob: Job? = null
+
+    companion object {
+        private const val WAVEFORM_BAR_COUNT = 60
+        private const val RMS_VISUAL_MAX = 8000f
+        private const val IDLE_BAR_INTERVAL_MS = 40L
+    }
 
     // Starred state is kept locally so it survives Firestore stream re-emissions.
     // Key format: "$deviceId:$timestamp"
     private val starredKeys = mutableSetOf<String>()
 
     init {
+        detector.onRmsChanged = { rms ->
+            val normalized = (rms / RMS_VISUAL_MAX).coerceIn(0f, 1f)
+            val current = _uiState.value
+            val bars = (current.waveformBars + WaveformBar(normalized))
+                .takeLast(WAVEFORM_BAR_COUNT)
+            _uiState.value = current.copy(waveformBars = bars)
+        }
+
         detector.onDetected = { event ->
             val adjusted = event.wallMillis + _uiState.value.latencyOffsetMs
             val formatted = TimestampFormatter.format(adjusted)
             val current = _uiState.value
 
+            val updatedBars = if (current.waveformBars.isNotEmpty()) {
+                current.waveformBars.dropLast(1) + current.waveformBars.last().copy(isDetection = true)
+            } else current.waveformBars
+
             // "Last detected" always reflects this device's own detections only
-            _uiState.value = current.copy(lastDetectedTimestamp = formatted)
+            _uiState.value = current.copy(lastDetectedTimestamp = formatted, waveformBars = updatedBars)
 
             if (current.isInSession && current.sessionCode != null) {
                 // Session mode: write to Firestore; the stream listener owns the history list
@@ -94,12 +116,30 @@ class GunShotViewModel(
                 )
             }
         }
+
+        startIdleWaveform()
+    }
+
+    private fun startIdleWaveform() {
+        waveformIdleJob?.cancel()
+        waveformIdleJob = viewModelScope.launch {
+            while (true) {
+                val tiny = (Math.random() * 0.03 + 0.01).toFloat()
+                val current = _uiState.value
+                val bars = (current.waveformBars + WaveformBar(tiny))
+                    .takeLast(WAVEFORM_BAR_COUNT)
+                _uiState.value = current.copy(waveformBars = bars)
+                kotlinx.coroutines.delay(IDLE_BAR_INTERVAL_MS)
+            }
+        }
     }
 
     // ── Listening ────────────────────────────────────────────
 
     fun startListening() {
         if (_uiState.value.detectorState != DetectorState.IDLE) return
+        waveformIdleJob?.cancel()
+        waveformIdleJob = null
         detector.sensitivityMultiplier = sliderToMultiplier(_uiState.value.sensitivity)
         _uiState.value = _uiState.value.copy(
             detectorState = DetectorState.LISTENING,
@@ -115,6 +155,7 @@ class GunShotViewModel(
                     detectorState = DetectorState.IDLE,
                     errorMessage = "Audio error: ${e.message}"
                 )
+                startIdleWaveform()
             }
         }
     }
@@ -123,6 +164,7 @@ class GunShotViewModel(
         detectionJob?.cancel()
         detectionJob = null
         _uiState.value = _uiState.value.copy(detectorState = DetectorState.IDLE)
+        startIdleWaveform()
     }
 
     // ── Session ──────────────────────────────────────────────
@@ -265,6 +307,7 @@ class GunShotViewModel(
         super.onCleared()
         detectionJob?.cancel()
         streamJob?.cancel()
+        waveformIdleJob?.cancel()
     }
 
     private fun sliderToMultiplier(slider: Float): Float {

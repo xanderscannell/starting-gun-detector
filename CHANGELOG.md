@@ -6,6 +6,7 @@
 - Buffer offset calculation was inverted — timestamp was computed relative to the start of the buffer rather than the end, causing timestamps to be reported up to one full buffer duration too early (~40ms systematic error)
 
 ### Added
+- Scrolling loudness visualizer above the Start/Stop button — bars driven by live microphone RMS, detection events highlighted in red, tiny idle bars scroll when not listening
 - Manual latency offset control (±500ms, 10ms steps) to compensate for device hardware input latency
 - Persistent username setting — shown as the session badge label instead of the short device ID
 - Latency offset and username are both persisted across app restarts via SharedPreferences

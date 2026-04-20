@@ -25,6 +25,9 @@ class AudioDetector {
     // Called on detection; runs on Dispatchers.IO
     var onDetected: ((DetectionEvent) -> Unit)? = null
 
+    // Called every buffer with the raw RMS value; runs on Dispatchers.IO
+    var onRmsChanged: ((Float) -> Unit)? = null
+
     // Sensitivity multiplier: how many times above baseline triggers detection.
     // Higher value = less sensitive (requires louder sound relative to baseline).
     var sensitivityMultiplier: Float = 8f
@@ -73,6 +76,7 @@ class AudioDetector {
                 if (read <= 0) continue
 
                 val rms = computeRms(buffer, read)
+                onRmsChanged?.invoke(rms.toFloat())
 
                 // Build rolling baseline
                 repeat(read) { baseline.addLast(rms) }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +72,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -86,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import com.xanderscannell.startinggundetector.viewmodel.DetectorState
 import com.xanderscannell.startinggundetector.viewmodel.UiState
+import com.xanderscannell.startinggundetector.viewmodel.WaveformBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -500,6 +504,14 @@ private fun ListenPage(
             )
         }
 
+        LoudnessVisualizer(
+            bars = uiState.waveformBars,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp)
+        )
+
         when (uiState.detectorState) {
             DetectorState.IDLE -> Button(
                 onClick = onStartListening,
@@ -811,6 +823,35 @@ private fun LatencyOffsetControl(offsetMs: Int, onOffsetChange: (Int) -> Unit) {
             FilledTonalIconButton(onClick = { onOffsetChange(offsetMs + 10) }) {
                 Icon(Icons.Filled.Add, contentDescription = "Increase offset")
             }
+        }
+    }
+}
+
+@Composable
+private fun LoudnessVisualizer(
+    bars: List<WaveformBar>,
+    modifier: Modifier = Modifier
+) {
+    val barColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+    val detectionColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier.height(48.dp)) {
+        val totalSlots = 60
+        val slotWidth = size.width / totalSlots
+        val gap = 2.dp.toPx()
+        val barWidth = (slotWidth - gap).coerceAtLeast(1f)
+        val maxHeight = size.height
+
+        bars.forEachIndexed { i, bar ->
+            val slotIndex = totalSlots - bars.size + i
+            val barHeight = (bar.normalizedRms * maxHeight).coerceAtLeast(2.dp.toPx())
+            val x = slotIndex * slotWidth
+            val y = maxHeight - barHeight
+            drawRect(
+                color = if (bar.isDetection) detectionColor else barColor,
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barHeight)
+            )
         }
     }
 }
