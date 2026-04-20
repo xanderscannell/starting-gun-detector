@@ -12,7 +12,10 @@ private val ColorScheme = darkColorScheme(
     background = Color(0xFF121212),
     surface = Color(0xFF1E1E1E),
     onBackground = Color.White,
-    onSurface = Color.White
+    onSurface = Color.White,
+    surfaceTint = Color.Transparent,
+    secondaryContainer = Color(0xFF141414),
+    onSecondaryContainer = Color(0xFFE53935)
 )
 
 @Composable

@@ -9,9 +9,19 @@
 - Manual latency offset control (±500ms, 10ms steps) to compensate for device hardware input latency
 - Persistent username setting — shown as the session badge label instead of the short device ID
 - Latency offset and username are both persisted across app restarts via SharedPreferences
+- Sidebar navigation (hamburger icon) with Listen, Capture, and Session pages
+- Gear icon opens a settings sheet with sensitivity and latency offset controls
+- Capture page placeholder for future finish-line camera sync feature
+- Session page — join/create session and username setting now live on a dedicated page instead of a dialog
 
 ### Changed
+- Live clock refreshes at ~60fps (16ms) instead of 100ms for smoother millisecond display
 - Session detection badges now show the sender's username instead of their short device ID; falls back to short ID if no name is set (also backwards-compatible with old Firestore documents that lack a display name)
+- Sensitivity control moved to a collapsible quick strip at the bottom of the Listen screen; full control also available in the settings sheet
+- Latency offset control moved from the Listen screen to the settings sheet
+- Username field moved from the Listen screen to the Session page
+- Status label changed from "TAP TO LISTEN" to "READY"
+- Clock is centred on the Listen screen until the first detection, then moves to the top above the history list
 
 ---
 

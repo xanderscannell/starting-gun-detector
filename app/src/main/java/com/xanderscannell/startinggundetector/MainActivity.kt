@@ -115,8 +115,6 @@ private fun App() {
                 onSensitivityChange = vm::setSensitivity,
                 onLatencyOffsetChange = vm::setLatencyOffset,
                 onUsernameChange = vm::setUsername,
-                onShowSessionDialog = vm::showSessionDialog,
-                onDismissSessionDialog = vm::dismissSessionDialog,
                 onCreateSession = vm::createSession,
                 onJoinSession = vm::joinSession,
                 onLeaveSession = vm::leaveSession,
