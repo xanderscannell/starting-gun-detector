@@ -178,10 +178,64 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 
 ---
 
+## Phase 6: Timing Accuracy Fixes
+
+**Goal**: Reduce worst-case split error from ~150-550ms to ~40-130ms by eliminating systematic latency sources. Full analysis in `.context/TIMING_AUDIT.md`.
+
+### 6.1 Pass raw detection millis to Firestore (TIMING-004, prerequisite)
+- [x] Change `writeDetection()` signature to accept raw detection millis
+- [x] Write `detectionMillis` (raw) and `serverCorrectedMillis` (millis + latencyOffset + serverOffset) as numeric Firestore fields
+- [x] Update `streamDetections()` to read back the new field
+- [x] Map `serverCorrectedMillis` into `DetectionEntry.serverTimestampMillis`
+
+### 6.2 Use server-corrected detection time for T_gun (TIMING-001)
+- [x] In split calculation, prefer `serverCorrectedMillis` over `createdAt`
+- [x] Fall back to `createdAt` if field is missing (backward compat with old detections)
+
+### 6.3 Fix recordingStartMillis capture timing (TIMING-002)
+- [x] Move `recordingStartMillis` capture into `VideoRecordEvent.Start` callback
+- [x] Verify frame timestamps shift correctly
+
+### 6.4 Apply latency offset to server-corrected time (TIMING-003)
+- [x] Ensure `latencyOffsetMs` is included in `serverCorrectedMillis` written to Firestore
+- [x] Verify split calculation uses the offset-corrected value
+
+### 6.5 Multi-sample server offset calibration (TIMING-005)
+- [x] Take 3-5 round-trip samples in `measureServerOffset()`
+- [x] Select the sample with shortest round-trip time (min `t2-t1`)
+- [x] Return that sample's computed offset
+
+### 6.6 Dynamic frame step from video fps (TIMING-006)
+- [x] Read actual frame rate from ExoPlayer `Format.frameRate` or `MediaMetadataRetriever`
+- [x] Compute `frameStepMs = (1000.0 / fps).toLong()`
+
+### 6.7 Thread-safe TimestampFormatter (TIMING-008)
+- [x] Replace `SimpleDateFormat` with `java.time.format.DateTimeFormatter`
+
+### 6.8 Re-calibrate on RECORD press (TIMING-007)
+- [x] Trigger `calibrateServerOffset()` when RECORD button is pressed
+- [x] Use the fresh offset for the recording's clock overlay and frame timestamps
+
+### 6.9 ExoPlayer PTS readback (TIMING-009)
+- [x] After seek settles, read `player.currentPosition` for frame timestamp instead of `sliderPosition`
+
+### Phase 6 Milestones
+- [x] Split calculation uses server-corrected detection time (not Firestore write time)
+- [x] recordingStartMillis accurately reflects first frame
+- [x] Calibration uses multi-sample measurement
+- [x] Frame step matches actual video fps
+- [x] Worst-case split error reduced to ~40-130ms
+
+---
+
 ## Phase Dependencies
 
 ```
 Phase 1 (Scaffold) ──► Phase 2 (Audio Engine) ──► Phase 3 (ViewModel + UI) ──► Phase 4 (Polish)
+                                                                                          │
+                                                                              Phase 5 (Finish Line Capture)
+                                                                                          │
+                                                                              Phase 6 (Timing Accuracy Fixes)
 ```
 
 ## Risk Areas

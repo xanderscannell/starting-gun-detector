@@ -24,8 +24,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +75,7 @@ import kotlinx.coroutines.delay
 fun CapturePage(
     isInSession: Boolean,
     serverOffsetMs: Long?,
+    gunServerTimestampMillis: Long?,
     onCalibrateServerOffset: () -> Unit
 ) {
     var permissionGranted by remember { mutableStateOf(false) }
@@ -99,6 +104,7 @@ fun CapturePage(
             videoFile = savedFile!!,
             recordingStartMillis = recordingStartMillis!!,
             serverOffsetMs = serverOffsetMs,
+            gunServerTimestampMillis = gunServerTimestampMillis,
             onBack = { reviewMode = false }
         )
     } else {
@@ -263,14 +269,17 @@ private fun CameraPreviewWithRecording(
             } else {
                 Button(
                     onClick = {
+                        onCalibrateServerOffset()
                         val fileName = "capture_${System.currentTimeMillis()}.mp4"
                         val file = File(context.filesDir, fileName)
                         val outputOptions = FileOutputOptions.Builder(file).build()
-                        val startMillis = System.currentTimeMillis()
+                        var startMillis = 0L
                         activeRecording.value = videoCaptureUseCase.output
                             .prepareRecording(context, outputOptions)
                             .start(ContextCompat.getMainExecutor(context)) { event ->
-                                if (event is VideoRecordEvent.Finalize) {
+                                if (event is VideoRecordEvent.Start) {
+                                    startMillis = System.currentTimeMillis()
+                                } else if (event is VideoRecordEvent.Finalize) {
                                     onRecordingComplete(file, startMillis)
                                 }
                             }
@@ -289,6 +298,7 @@ private fun VideoScrubber(
     videoFile: File,
     recordingStartMillis: Long,
     serverOffsetMs: Long?,
+    gunServerTimestampMillis: Long?,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -308,6 +318,8 @@ private fun VideoScrubber(
     var duration by remember { mutableStateOf(0L) }
     var sliderPosition by remember { mutableStateOf(0L) }
     val currentOffset by rememberUpdatedState(serverOffsetMs)
+    var finishers by remember { mutableStateOf(listOf<Long>()) }
+    var frameStepMs by remember { mutableStateOf(33L) }
 
     LaunchedEffect(player) {
         while (duration <= 0L) {
@@ -315,9 +327,11 @@ private fun VideoScrubber(
             if (d > 0L) duration = d
             delay(50)
         }
+        val format = player.videoFormat
+        if (format != null && format.frameRate > 0f) {
+            frameStepMs = (1000.0 / format.frameRate).toLong().coerceAtLeast(1L)
+        }
     }
-
-    val frameStepMs = 33L
 
     val frameTimestamp = remember(sliderPosition, serverOffsetMs) {
         TimestampFormatter.format(recordingStartMillis + (currentOffset ?: 0L) + sliderPosition)
@@ -392,6 +406,7 @@ private fun VideoScrubber(
             onValueChangeFinished = {
                 player.setSeekParameters(SeekParameters.EXACT)
                 player.seekTo(sliderPosition)
+                sliderPosition = player.currentPosition
             },
             valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
             modifier = Modifier
@@ -403,14 +418,16 @@ private fun VideoScrubber(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
                 onClick = {
+                    player.setSeekParameters(SeekParameters.EXACT)
                     sliderPosition = (sliderPosition - frameStepMs).coerceAtLeast(0L)
                     player.seekTo(sliderPosition)
+                    sliderPosition = player.currentPosition
                 },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             ) {
@@ -419,14 +436,117 @@ private fun VideoScrubber(
             Spacer(modifier = Modifier.width(16.dp))
             OutlinedButton(
                 onClick = {
+                    player.setSeekParameters(SeekParameters.EXACT)
                     sliderPosition = (sliderPosition + frameStepMs).coerceAtMost(duration)
                     player.seekTo(sliderPosition)
+                    sliderPosition = player.currentPosition
                 },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             ) {
                 Text("Frame ▶")
             }
         }
+
+        // Mark Finish button
+        Button(
+            onClick = {
+                val frameMillis = recordingStartMillis + (currentOffset ?: 0L) + sliderPosition
+                finishers = finishers + frameMillis
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text("MARK FINISH")
+        }
+
+        // Finisher results list
+        if (finishers.isNotEmpty()) {
+            HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Finishers",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                TextButton(onClick = { finishers = finishers.dropLast(1) }) {
+                    Text("Undo", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+                }
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp)
+            ) {
+                itemsIndexed(finishers) { index, frameMillis ->
+                    val split = gunServerTimestampMillis?.let { formatSplit(frameMillis - it) }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = ordinal(index + 1),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.width(36.dp)
+                        )
+                        Text(
+                            text = TimestampFormatter.format(frameMillis),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 15.sp,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (split != null) {
+                            Text(
+                                text = split,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (index < finishers.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = Color.White.copy(alpha = 0.06f)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+private fun ordinal(n: Int): String = when {
+    n % 100 in 11..13 -> "${n}th"
+    n % 10 == 1 -> "${n}st"
+    n % 10 == 2 -> "${n}nd"
+    n % 10 == 3 -> "${n}rd"
+    else -> "${n}th"
+}
+
+private fun formatSplit(millis: Long): String {
+    val abs = if (millis < 0) -millis else millis
+    val sign = if (millis < 0) "-" else "+"
+    val m = abs / 60000
+    val s = (abs % 60000) / 1000
+    val ms = abs % 1000
+    return if (m > 0) {
+        "$sign$m:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}"
+    } else {
+        "$sign$s.${ms.toString().padStart(3, '0')}"
     }
 }
 

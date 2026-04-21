@@ -17,6 +17,7 @@ Before writing any code, read these files in order:
 
 Read as needed:
 - `.context/DECISIONS.md` — past architectural decisions, to avoid re-debating settled questions
+- `.context/TIMING_AUDIT.md` — full timing accuracy analysis and fix plan (Phase 6)
 
 ### Every Session — During Work
 
@@ -36,13 +37,13 @@ Before the session ends:
 
 ## Current Focus
 
-**Phase**: All phases complete — app shipped to testers
+**Phase**: Phase 6 — Timing Accuracy Fixes
 **Last commit**: `feat: shared session via Firebase Firestore` (2026-04-19)
-**Next priorities** (if returning):
+**Active work**: Timing system audit complete (`.context/TIMING_AUDIT.md`). 10 issues identified, ~150-550ms worst-case error reducible to ~40-130ms.
+**Next priorities**:
+- Implement Phase 6 fixes (TIMING-004 → TIMING-001 → TIMING-002 → TIMING-003 first)
 - Firestore security rules (restrict writes to session members)
-- Manual latency offset entry (Phase 4.2)
 - Session expiry / cleanup
-- UI polish for wider distribution
 
 ## Reference
 
@@ -52,4 +53,5 @@ Before the session ends:
 | `.context/MASTER_PLAN.md` | Implementation roadmap |
 | `.context/ARCHITECTURE.md` | System design and components |
 | `.context/DECISIONS.md` | Architecture Decision Records |
+| `.context/TIMING_AUDIT.md` | Timing accuracy analysis and Phase 6 fix plan |
 | `.context/CONVENTIONS.md` | Tooling, environment, and build commands |

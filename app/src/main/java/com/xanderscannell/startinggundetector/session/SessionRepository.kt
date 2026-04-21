@@ -13,7 +13,8 @@ data class FirestoreDetection(
     val timestamp: String,
     val deviceId: String,
     val displayName: String,
-    val clientTimestamp: Long
+    val clientTimestamp: Long,
+    val serverTimestampMillis: Long? = null
 )
 
 data class SessionMember(
@@ -53,7 +54,13 @@ class SessionRepository(private val deviceId: String) {
         return db.collection("sessions").document(code.uppercase()).get().await().exists()
     }
 
-    suspend fun writeDetection(sessionCode: String, timestamp: String, displayName: String) {
+    suspend fun writeDetection(
+        sessionCode: String,
+        timestamp: String,
+        displayName: String,
+        detectionMillis: Long,
+        serverCorrectedMillis: Long
+    ) {
         db.collection("sessions").document(sessionCode)
             .collection("detections")
             .add(
@@ -61,7 +68,8 @@ class SessionRepository(private val deviceId: String) {
                     "timestamp" to timestamp,
                     "deviceId" to deviceId,
                     "displayName" to displayName,
-                    "clientTimestamp" to System.currentTimeMillis(),
+                    "clientTimestamp" to detectionMillis,
+                    "serverCorrectedMillis" to serverCorrectedMillis,
                     "createdAt" to FieldValue.serverTimestamp()
                 )
             ).await()
@@ -104,22 +112,33 @@ class SessionRepository(private val deviceId: String) {
 
     /**
      * Measures the offset between this device's clock and the Firestore server clock.
-     * Uses the NTP midpoint formula: serverOffset = serverTime − midpoint(t1, t2)
-     * where t1/t2 are client times before/after the write round-trip.
+     * Takes multiple round-trip samples and picks the one with the shortest RTT,
+     * since shorter round-trips have less asymmetric latency error.
      * Returns serverOffset in milliseconds — add this to System.currentTimeMillis() to get
      * a server-relative timestamp.
      */
     suspend fun measureServerOffset(): Long {
         val docRef = db.collection("calibrations").document(deviceId)
-        val t1 = System.currentTimeMillis()
-        docRef.set(mapOf(
-            "clientTimestamp" to t1,
-            "serverTimestamp" to FieldValue.serverTimestamp()
-        )).await()
-        val t2 = System.currentTimeMillis()
-        val serverTimestamp = docRef.get().await()
-            .getTimestamp("serverTimestamp")?.toDate()?.time ?: return 0L
-        return serverTimestamp - (t1 + t2) / 2
+        var bestOffset = 0L
+        var bestRtt = Long.MAX_VALUE
+
+        repeat(5) {
+            val t1 = System.currentTimeMillis()
+            docRef.set(mapOf(
+                "clientTimestamp" to t1,
+                "serverTimestamp" to FieldValue.serverTimestamp()
+            )).await()
+            val t2 = System.currentTimeMillis()
+            val serverTimestamp = docRef.get().await()
+                .getTimestamp("serverTimestamp")?.toDate()?.time ?: return@repeat
+            val rtt = t2 - t1
+            val offset = serverTimestamp - (t1 + t2) / 2
+            if (rtt < bestRtt) {
+                bestRtt = rtt
+                bestOffset = offset
+            }
+        }
+        return bestOffset
     }
 
     fun streamDetections(sessionCode: String): Flow<List<FirestoreDetection>> = callbackFlow {
@@ -134,7 +153,10 @@ class SessionRepository(private val deviceId: String) {
                     val displayName = doc.getString("displayName")
                         ?: DeviceIdProvider.shortId(docDeviceId)
                     val clientTimestamp = doc.getLong("clientTimestamp") ?: 0L
-                    FirestoreDetection(timestamp, docDeviceId, displayName, clientTimestamp)
+                    val serverCorrected = doc.getLong("serverCorrectedMillis")
+                    val serverTs = serverCorrected
+                        ?: doc.getTimestamp("createdAt", com.google.firebase.firestore.DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time
+                    FirestoreDetection(timestamp, docDeviceId, displayName, clientTimestamp, serverTs)
                 }
                 trySend(detections)
             }

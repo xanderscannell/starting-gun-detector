@@ -168,6 +168,7 @@ fun StartingGunScreen(
                 AppPage.CAPTURE -> CapturePage(
                     isInSession = uiState.isInSession,
                     serverOffsetMs = uiState.serverOffsetMs,
+                    gunServerTimestampMillis = uiState.detectionHistory.firstOrNull { it.starred }?.serverTimestampMillis,
                     onCalibrateServerOffset = onCalibrateServerOffset
                 )
             }

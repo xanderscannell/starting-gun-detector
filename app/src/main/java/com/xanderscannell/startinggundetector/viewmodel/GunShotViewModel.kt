@@ -23,7 +23,8 @@ data class DetectionEntry(
     val starred: Boolean = false,
     val deviceId: String = "",
     val displayName: String = "",
-    val isMine: Boolean = true
+    val isMine: Boolean = true,
+    val serverTimestampMillis: Long? = null
 )
 
 data class UiState(
@@ -100,9 +101,15 @@ class GunShotViewModel(
             if (current.isInSession && current.sessionCode != null) {
                 // Session mode: write to Firestore; the stream listener owns the history list
                 val displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                val serverOffset = current.serverOffsetMs ?: 0L
+                val serverCorrected = adjusted + serverOffset
                 viewModelScope.launch {
                     try {
-                        sessionRepository.writeDetection(current.sessionCode, formatted, displayName)
+                        sessionRepository.writeDetection(
+                            current.sessionCode, formatted, displayName,
+                            detectionMillis = adjusted,
+                            serverCorrectedMillis = serverCorrected
+                        )
                     } catch (e: Exception) {
                         _uiState.value = _uiState.value.copy(
                             errorMessage = "Failed to sync detection"
@@ -110,12 +117,15 @@ class GunShotViewModel(
                     }
                 }
             } else {
-                // Solo mode: update history locally
+                // Solo mode: update history locally.
+                // serverTimestampMillis uses the adjusted wall millis directly — no cross-device
+                // sync needed since gun and capture are on the same device.
                 val entry = DetectionEntry(
                     timestamp = formatted,
                     deviceId = deviceId,
                     displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) },
-                    isMine = true
+                    isMine = true,
+                    serverTimestampMillis = adjusted
                 )
                 _uiState.value = _uiState.value.copy(
                     detectionHistory = listOf(entry) + _uiState.value.detectionHistory
@@ -301,7 +311,8 @@ class GunShotViewModel(
                         starred = key in starredKeys,
                         deviceId = fd.deviceId,
                         displayName = fd.displayName,
-                        isMine = fd.deviceId == deviceId
+                        isMine = fd.deviceId == deviceId,
+                        serverTimestampMillis = fd.serverTimestampMillis
                     )
                 }
                 _uiState.value = _uiState.value.copy(detectionHistory = mapped)
