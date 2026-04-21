@@ -126,6 +126,58 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 
 ---
 
+---
+
+## Phase 5: Finish Line Capture (Video-Based)
+
+**Goal**: Record video at the finish line with a live clock overlay. After the race, scrub frame-by-frame to find the exact crossing moment and compute the split time against the session's gun timestamp.
+
+**Concept**: Professional photo finish approach adapted for consumer hardware. Clock overlay burned into / overlaid on video means the timestamp is readable directly from the frame — no PTS math required. Precision bounded by frame rate (60fps = ~16ms) and NTP clock accuracy (~10–50ms).
+
+### 5.1 Camera preview in Capture tab
+- [x] Add CameraX dependency (`camera-camera2`, `camera-lifecycle`, `camera-view`)
+- [x] Add `CAMERA` permission to `AndroidManifest.xml`
+- [x] Wire up Capture tab with a live `PreviewView` via Compose interop
+- [x] Handle camera permission request flow
+
+### 5.2 Record video to local storage
+- [x] Add Record / Stop button to Capture tab
+- [x] Capture `recordingStartMillis = System.currentTimeMillis()` at recording start
+- [x] Save MP4 to app-private storage via `VideoCapture<Recorder>`
+- [x] Store `recordingStartMillis` alongside the file reference
+
+### 5.3 Server offset calibration
+- [x] At session start, finish phone performs a Firestore round-trip: `serverOffset = serverTime − clientTime`
+- [x] Store `serverOffset` in ViewModel for the duration of the session
+- [x] Warn user if calibration hasn't been performed before recording starts
+
+### 5.4 Clock overlay on preview
+- [x] Render live clock composable over the `PreviewView`
+- [x] Clock displays server-relative time: `System.currentTimeMillis() + serverOffset`
+- [x] Updates every 16ms (aligned to 60fps)
+
+### 5.5 Frame scrubber playback
+- [x] Load recorded video with ExoPlayer
+- [x] Custom scrubber UI — slider seeks by frame (step = `1000ms / fps`)
+- [x] Display current frame's server-relative timestamp: `recordingStartMillis + serverOffset + seekPositionMs`
+- [x] Smooth single-frame stepping (forward/back buttons)
+
+### 5.6 Post-race split calculation
+- [ ] Session screen lists all gun detections with their Firestore `serverTimestamp`
+- [ ] User selects the official detection (existing star feature covers this)
+- [ ] User scrubs video to crossing frame and taps "Set Finish"
+- [ ] Split = `server_relative_frame_time − T_gun_serverTimestamp`
+- [ ] Display and allow saving the result
+
+### Phase 5 Milestones
+- [ ] Camera preview renders in Capture tab
+- [ ] Video records and saves to device
+- [ ] Clock overlay visible in preview and readable in playback
+- [ ] Frame scrubber steps frame-by-frame accurately
+- [ ] Split time correctly computed from gun timestamp
+
+---
+
 ## Phase Dependencies
 
 ```

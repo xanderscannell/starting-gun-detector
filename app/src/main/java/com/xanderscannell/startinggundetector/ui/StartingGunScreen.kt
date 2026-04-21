@@ -111,6 +111,7 @@ fun StartingGunScreen(
     onCreateSession: () -> Unit,
     onJoinSession: (String) -> Unit,
     onLeaveSession: () -> Unit,
+    onCalibrateServerOffset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentPage by remember { mutableStateOf(AppPage.LISTEN) }
@@ -164,7 +165,11 @@ fun StartingGunScreen(
                     onLeaveSession = onLeaveSession,
                     onUsernameChange = onUsernameChange
                 )
-                AppPage.CAPTURE -> CapturePage()
+                AppPage.CAPTURE -> CapturePage(
+                    isInSession = uiState.isInSession,
+                    serverOffsetMs = uiState.serverOffsetMs,
+                    onCalibrateServerOffset = onCalibrateServerOffset
+                )
             }
         }
 
@@ -741,42 +746,6 @@ private fun SessionPage(
     }
 }
 
-@Composable
-private fun CapturePage() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Videocam,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Capture Mode",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Finish line camera sync coming soon.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Requires an active session.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
-        )
-    }
-}
 
 @Composable
 private fun DeviceBadge(label: String, isMine: Boolean, modifier: Modifier = Modifier) {

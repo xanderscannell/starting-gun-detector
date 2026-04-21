@@ -118,6 +118,7 @@ private fun App() {
                 onCreateSession = vm::createSession,
                 onJoinSession = vm::joinSession,
                 onLeaveSession = vm::leaveSession,
+                onCalibrateServerOffset = vm::calibrateServerOffset,
                 modifier = Modifier.padding(innerPadding)
             )
         }

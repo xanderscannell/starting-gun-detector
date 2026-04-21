@@ -29,11 +29,14 @@ Nothing.
 
 ## Next Up (future sessions)
 
+- **Phase 5.1** — Camera preview in Capture tab (start here next session)
+- **Phase 5.2** — Record video with `recordingStartMillis` captured
+- **Phase 5.3** — Live clock overlay on preview
+- **Phase 5.4** — Frame-by-frame scrubber playback (ExoPlayer)
+- **Phase 5.5** — Split time calculation from gun timestamp
 - Manual latency offset entry (Phase 4.2, optional)
-- UI polish (loading states, empty state art, onboarding)
-- Internal test track distribution (Firebase App Distribution or direct APK)
 - Firestore security rules (currently open — restrict to session-member writes)
-- Consider session expiry / cleanup (stale sessions accumulate)
+- Session expiry / cleanup (stale sessions accumulate)
 
 ## Active Files and Modules
 
@@ -62,3 +65,4 @@ app/src/main/java/com/xanderscannell/startinggundetector/
 - **Firestore security rules**: Currently open-read/write. Should restrict so only devices in a session can write detections. Low priority until wider distribution.
 - **Session expiry**: Sessions accumulate indefinitely. Consider a TTL or manual cleanup function.
 - **Keystore management**: Release keystore was created locally. User should back it up — without it, future updates cannot be signed with the same key.
+- **Known gap — scrubber calibration warning**: In `VideoScrubber`, if `serverOffsetMs` is null when the user opens the scrubber, the timestamp silently falls back to 0ms offset (client time) with no warning. The "Clock not synced" warning only exists on the camera preview screen. Fix: show a warning banner in the scrubber when `serverOffsetMs == null`.

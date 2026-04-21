@@ -40,7 +40,10 @@ data class UiState(
     val showSessionDialog: Boolean = false,
     val sessionError: String? = null,
     val waveformBars: List<WaveformBar> = emptyList(),
-    val sessionMembers: List<SessionMember> = emptyList()
+    val sessionMembers: List<SessionMember> = emptyList(),
+    // Offset in ms to convert System.currentTimeMillis() to Firestore server time.
+    // Null = not yet calibrated. Set automatically on join/create; can be refreshed manually.
+    val serverOffsetMs: Long? = null
 )
 
 class GunShotViewModel(
@@ -207,6 +210,7 @@ class GunShotViewModel(
                     detectionHistory = emptyList()
                 )
                 startStream(code)
+                calibrateServerOffset()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     sessionLoading = false,
@@ -237,6 +241,7 @@ class GunShotViewModel(
                         detectionHistory = emptyList()
                     )
                     startStream(upperCode)
+                    calibrateServerOffset()
                 } else {
                     _uiState.value = _uiState.value.copy(
                         sessionLoading = false,
@@ -248,6 +253,17 @@ class GunShotViewModel(
                     sessionLoading = false,
                     sessionError = "Failed to join session"
                 )
+            }
+        }
+    }
+
+    fun calibrateServerOffset() {
+        viewModelScope.launch {
+            try {
+                val offset = sessionRepository.measureServerOffset()
+                _uiState.value = _uiState.value.copy(serverOffsetMs = offset)
+            } catch (e: Exception) {
+                // Leave serverOffsetMs as-is — UI will show uncalibrated warning
             }
         }
     }
@@ -269,7 +285,8 @@ class GunShotViewModel(
             isInSession = false,
             detectionHistory = emptyList(),
             sessionMembers = emptyList(),
-            lastDetectedTimestamp = ""
+            lastDetectedTimestamp = "",
+            serverOffsetMs = null
         )
     }
 

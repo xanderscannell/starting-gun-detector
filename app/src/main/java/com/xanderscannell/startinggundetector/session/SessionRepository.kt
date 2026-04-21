@@ -102,6 +102,26 @@ class SessionRepository(private val deviceId: String) {
         awaitClose { listener.remove() }
     }
 
+    /**
+     * Measures the offset between this device's clock and the Firestore server clock.
+     * Uses the NTP midpoint formula: serverOffset = serverTime − midpoint(t1, t2)
+     * where t1/t2 are client times before/after the write round-trip.
+     * Returns serverOffset in milliseconds — add this to System.currentTimeMillis() to get
+     * a server-relative timestamp.
+     */
+    suspend fun measureServerOffset(): Long {
+        val docRef = db.collection("calibrations").document(deviceId)
+        val t1 = System.currentTimeMillis()
+        docRef.set(mapOf(
+            "clientTimestamp" to t1,
+            "serverTimestamp" to FieldValue.serverTimestamp()
+        )).await()
+        val t2 = System.currentTimeMillis()
+        val serverTimestamp = docRef.get().await()
+            .getTimestamp("serverTimestamp")?.toDate()?.time ?: return 0L
+        return serverTimestamp - (t1 + t2) / 2
+    }
+
     fun streamDetections(sessionCode: String): Flow<List<FirestoreDetection>> = callbackFlow {
         val listener = db.collection("sessions").document(sessionCode)
             .collection("detections")
