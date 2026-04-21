@@ -90,17 +90,19 @@ import androidx.compose.ui.unit.sp
 import com.xanderscannell.startinggundetector.session.SessionMember
 import com.xanderscannell.startinggundetector.utils.TimestampFormatter
 import com.xanderscannell.startinggundetector.viewmodel.DetectorState
+import com.xanderscannell.startinggundetector.viewmodel.RaceViewModel
 import com.xanderscannell.startinggundetector.viewmodel.UiState
 import com.xanderscannell.startinggundetector.viewmodel.WaveformBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class AppPage { LISTEN, SESSION, CAPTURE }
+enum class AppPage { LISTEN, SESSION, CAPTURE, RACES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartingGunScreen(
     uiState: UiState,
+    raceViewModel: RaceViewModel,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
     onClearHistory: () -> Unit,
@@ -169,7 +171,16 @@ fun StartingGunScreen(
                     isInSession = uiState.isInSession,
                     serverOffsetMs = uiState.serverOffsetMs,
                     gunServerTimestampMillis = uiState.detectionHistory.firstOrNull { it.starred }?.serverTimestampMillis,
+                    detectionHistory = uiState.detectionHistory,
+                    raceViewModel = raceViewModel,
                     onCalibrateServerOffset = onCalibrateServerOffset
+                )
+                AppPage.RACES -> RaceBrowserPage(
+                    raceViewModel = raceViewModel,
+                    onOpenRace = { raceId ->
+                        raceViewModel.loadRace(raceId)
+                        currentPage = AppPage.CAPTURE
+                    }
                 )
             }
         }
@@ -261,6 +272,13 @@ private fun AppDrawerContent(
             selected = currentPage == AppPage.SESSION,
             onClick = { onNavigate(AppPage.SESSION) },
             icon = { Icon(Icons.Default.Group, contentDescription = null) },
+            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+        )
+        NavigationDrawerItem(
+            label = { Text("Races") },
+            selected = currentPage == AppPage.RACES,
+            onClick = { onNavigate(AppPage.RACES) },
+            icon = { Icon(Icons.Default.Star, contentDescription = null) },
             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
         )
 

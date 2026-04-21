@@ -228,6 +228,53 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 
 ---
 
+## Phase 7: Race File Persistence System
+
+**Goal**: Save race results (start time, video, split times) as persistent race files. Browsable history with Meet > Event > Race hierarchy. Multiple candidate start times with post-race selection, replacing the star system.
+
+### 7.1 Dependencies + Data Model
+- [x] Add `kotlinx-serialization` plugin and dependency
+- [x] Create `data/RaceModels.kt` — Race, StartTime, FinishSplit, StartTimeSource
+
+### 7.2 Repository
+- [x] Create `data/RaceRepository.kt` — JSON file persistence, video management, orphan cleanup
+- [x] Wire in `MainActivity.kt`
+
+### 7.3 ViewModel
+- [x] Create `viewmodel/RaceViewModel.kt` + `RaceViewModelFactory.kt`
+- [x] Wire factory in `MainActivity.kt`
+
+### 7.4 Save Flow
+- [x] Modify `CaptureScreen.kt` to accept `RaceViewModel`
+- [x] Add Save Race button + meet/event name dialog with autocomplete
+- [x] Convert detection history → StartTimes on save
+- [x] Move video file into race directory on save
+
+### 7.5 Browse + Reopen
+- [x] Create `ui/RaceBrowserScreen.kt` — three-level drill-down
+- [x] Add RACES page to drawer navigation
+- [x] Wire race selection → reopen scrubber with loaded race
+
+### 7.6 Start Time Selection
+- [x] Replace star system with start time list UI (FilterChip selector)
+- [x] Add official start time picker
+- [x] Add manual start time entry dialog
+- [x] Update split computation to use selected start time
+
+### 7.7 Cleanup
+- [x] Orphaned video cleanup on app startup (24h threshold)
+- [x] Delete race capability in browser
+- [x] Delete previous capture files when starting a new recording
+
+### Phase 7 Milestones
+- [x] Races persist as JSON + video in app storage
+- [x] Browse saved races by Meet > Event > Race
+- [x] Reopen and re-edit any saved race
+- [x] Multiple candidate start times with official selection
+- [x] Manual start time entry for solo use
+
+---
+
 ## Phase Dependencies
 
 ```
@@ -236,6 +283,8 @@ Phase 1 (Scaffold) ──► Phase 2 (Audio Engine) ──► Phase 3 (ViewModel
                                                                               Phase 5 (Finish Line Capture)
                                                                                           │
                                                                               Phase 6 (Timing Accuracy Fixes)
+                                                                                          │
+                                                                              Phase 7 (Race File Persistence)
 ```
 
 ## Risk Areas

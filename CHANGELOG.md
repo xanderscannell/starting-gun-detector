@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.4.0 — 2026-04-21
+
+### Added
+- **Race file persistence** — save a race (start times, video, finish splits) as a single file that can be reopened and re-edited at any time
+- **Race browser** — three-level drill-down: Meet → Event → Race, with delete capability
+- **Multiple candidate start times per race** — audio detections, session detections, and manual entry all appear as selectable start times; pick the correct one post-race
+- **Manual start time entry** — enter a precise HH:mm:ss.SSS time for solo use without a session
+- **Save Race dialog** — prompts for meet name (with autocomplete from previous races), event name, and date
+- Orphaned video cleanup on app startup (captures older than 24h with no associated race are deleted)
+- Previous capture files deleted when starting a new recording to prevent storage accumulation
+
+### Changed
+- Star/favourite system replaced by official start time selection — splits are computed against whichever start time is selected
+- CaptureScreen split into two modes: new recording scrubber (with save button) and saved race scrubber (with manual start time entry)
+- RACES page added to sidebar navigation
+
+### Technical
+- Race data stored as JSON + video per race directory (`races/<uuid>/race.json` + `video.mp4`)
+- `kotlinx-serialization-json` added for persistence (no Room/KSP overhead)
+- New files: `RaceModels.kt`, `RaceRepository.kt`, `RaceViewModel.kt`, `RaceViewModelFactory.kt`, `RaceBrowserScreen.kt`
+
+---
+
 ## v1.3.0 — 2026-04-20
 
 ### Added

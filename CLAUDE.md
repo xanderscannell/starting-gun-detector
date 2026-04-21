@@ -37,13 +37,13 @@ Before the session ends:
 
 ## Current Focus
 
-**Phase**: Phase 6 — Timing Accuracy Fixes
-**Last commit**: `feat: shared session via Firebase Firestore` (2026-04-19)
-**Active work**: Timing system audit complete (`.context/TIMING_AUDIT.md`). 10 issues identified, ~150-550ms worst-case error reducible to ~40-130ms.
+**Phase**: Phase 7 complete — Race File Persistence
+**Last commit**: `feat: timing accuracy fixes` (2026-04-20)
+**Active work**: All planned phases complete. Race persistence system shipped with save/browse/reopen/edit workflow.
 **Next priorities**:
-- Implement Phase 6 fixes (TIMING-004 → TIMING-001 → TIMING-002 → TIMING-003 first)
 - Firestore security rules (restrict writes to session members)
 - Session expiry / cleanup
+- Data export (CSV/PDF race results)
 
 ## Reference
 

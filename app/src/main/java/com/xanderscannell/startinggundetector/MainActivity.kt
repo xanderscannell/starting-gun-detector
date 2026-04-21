@@ -37,10 +37,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import com.xanderscannell.startinggundetector.device.UserPreferences
 import com.xanderscannell.startinggundetector.session.SessionRepository
+import com.xanderscannell.startinggundetector.data.RaceRepository
 import com.xanderscannell.startinggundetector.ui.StartingGunScreen
 import com.xanderscannell.startinggundetector.ui.theme.StartingGunTheme
 import com.xanderscannell.startinggundetector.viewmodel.GunShotViewModel
 import com.xanderscannell.startinggundetector.viewmodel.GunShotViewModelFactory
+import com.xanderscannell.startinggundetector.viewmodel.RaceViewModel
+import com.xanderscannell.startinggundetector.viewmodel.RaceViewModelFactory
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,10 +69,18 @@ private fun App() {
     val deviceId = remember { DeviceIdProvider.getDeviceId(context) }
     val sessionRepository = remember { SessionRepository(deviceId) }
     val userPreferences = remember { UserPreferences(context) }
+    val raceRepository = remember { RaceRepository(File(context.filesDir, "races")) }
     val vm: GunShotViewModel = viewModel(
         factory = GunShotViewModelFactory(deviceId, sessionRepository, userPreferences)
     )
+    val raceVm: RaceViewModel = viewModel(
+        factory = RaceViewModelFactory(raceRepository)
+    )
     val uiState by vm.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        RaceRepository.cleanupOrphanedVideos(context.filesDir)
+    }
 
     var permissionGranted by remember { mutableStateOf(false) }
     var showRationale by remember { mutableStateOf(false) }
@@ -108,6 +120,7 @@ private fun App() {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             StartingGunScreen(
                 uiState = uiState,
+                raceViewModel = raceVm,
                 onStartListening = vm::startListening,
                 onStopListening = vm::stopListening,
                 onClearHistory = vm::clearHistory,
