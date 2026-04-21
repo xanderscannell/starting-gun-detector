@@ -2,15 +2,28 @@
 
 ## v1.3.0 — 2026-04-20
 
-### Changed
-- Session page members list replaces the raw detection history — shows one row per device with their name on the left and last detected time on the right
-- Devices appear in the session list as soon as they join, even before making a detection (previously a device was invisible until it fired)
-- "Devices: N" header shows the live count of connected devices
-
 ### Added
-- Live listening status indicator — a green dot appears next to a device's name while they are actively listening; turns grey when they stop
-- Listening status is written to Firestore on start/stop/leave so all connected devices see it in real time
-- Your own device is always sorted to the top of the members list and shown in the primary colour
+- **Finish line capture** — CaptureScreen with live camera preview, video recording, and ExoPlayer-based frame scrubber for identifying exact finish times
+- Frame scrubber seeks directly during drag (CLOSEST_SYNC for speed, EXACT on release for precision); frame timestamp computed from `recordingStartMillis + serverOffset + seekPositionMs`
+- Server clock sync via Firestore round-trip — calibrates automatically on session join/create and after each recording; warns if clock is not yet calibrated
+- Live listening status indicator — green dot next to a device's name while actively listening; grey when stopped
+- Listening status written to Firestore on start/stop/leave so all connected devices see it in real time
+- Your own device always sorted to the top of the members list and shown in primary colour
+
+### Changed
+- Session page members list replaces raw detection history — one row per device with name and last detected time
+- Devices appear in the session list as soon as they join, even before making a detection
+- "Devices: N" header shows live count of connected devices
+
+### Fixed (Timing Accuracy)
+- **Detection millis now server-corrected before Firestore write** — eliminates network write latency from reported gun time (TIMING-004 + TIMING-001)
+- `recordingStartMillis` captured on `VideoRecordEvent.Start` instead of before `.start()` — removes variable startup delay from split calculations (TIMING-002)
+- Multi-sample server offset calibration (5 samples, shortest RTT wins) for tighter clock sync (TIMING-005)
+- Server offset re-calibrated on every RECORD press to catch drift (TIMING-007)
+- Dynamic frame step derived from actual video fps instead of hardcoded value (TIMING-006)
+- Thread-safe `TimestampFormatter` rewritten with `java.time` — fixes potential race condition on concurrent format calls (TIMING-008)
+- ExoPlayer PTS readback after seek for accurate frame position (TIMING-009)
+- **Overall worst-case split error reduced from ~550ms to ~130ms**
 
 ---
 
