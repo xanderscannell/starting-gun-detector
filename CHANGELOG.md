@@ -1,14 +1,17 @@
 # Changelog
 
-## [Unreleased]
+## v1.5.0 — 2026-04-21
 
 ### Added
 - **Background listening** — app continues detecting while the screen is locked via a foreground service with a persistent notification
+- **Latency calibration** — fire the gun and enter the real time from a reference clock for one or more samples; the app computes and applies the average offset automatically
 - Screen stays on while the app is in the foreground
 
 ### Changed
 - Sidebar subtitle shows device short ID (e.g. `ID: A3F9`) when no username is set, instead of the generic "Detector"
 - Placeholder text in Session tab is now italicised and dimmed to make it more obviously a hint
+- Latency offset is now a directly editable text field in addition to the +/− buttons
+- Removed the 500ms cap on the latency offset
 
 ---
 

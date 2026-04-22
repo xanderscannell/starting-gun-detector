@@ -13,6 +13,7 @@ import com.xanderscannell.startinggundetector.MainActivity
 import com.xanderscannell.startinggundetector.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,6 +28,7 @@ class ListeningService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val detector = AudioDetector()
+    private var detectorJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -43,11 +45,17 @@ class ListeningService : Service() {
         val sensitivity = intent?.getFloatExtra(EXTRA_SENSITIVITY, 8f) ?: 8f
         detector.sensitivityMultiplier = sensitivity
         startForeground(NOTIFICATION_ID, buildNotification())
-        serviceScope.launch { detector.run() }
+        if (detectorJob?.isActive != true) {
+            detectorJob = serviceScope.launch { detector.run() }
+        }
+        isRunning = true
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        isRunning = false
+        detectorJob?.cancel()
+        detectorJob = null
         serviceScope.cancel()
         _rmsFlow.value = 0f
         super.onDestroy()
@@ -87,6 +95,8 @@ class ListeningService : Service() {
         private const val CHANNEL_ID = "listening_service"
         private const val NOTIFICATION_ID = 1
         private const val EXTRA_SENSITIVITY = "sensitivity"
+
+        @Volatile var isRunning = false
 
         private val _detectionFlow = MutableSharedFlow<DetectionEvent>(extraBufferCapacity = 8)
         val detectionFlow: SharedFlow<DetectionEvent> = _detectionFlow.asSharedFlow()

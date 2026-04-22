@@ -353,9 +353,8 @@ class GunShotViewModel(
     }
 
     fun setLatencyOffset(ms: Int) {
-        val clamped = ms.coerceIn(-500, 500)
-        userPreferences.latencyOffsetMs = clamped
-        _uiState.value = _uiState.value.copy(latencyOffsetMs = clamped)
+        userPreferences.latencyOffsetMs = ms
+        _uiState.value = _uiState.value.copy(latencyOffsetMs = ms)
     }
 
     fun setUsername(name: String) {

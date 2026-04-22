@@ -121,6 +121,7 @@ fun StartingGunScreen(
     var currentPage by remember { mutableStateOf(AppPage.LISTEN) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showCalibration by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var liveClock by remember { mutableStateOf("") }
 
@@ -192,7 +193,19 @@ fun StartingGunScreen(
                 uiState = uiState,
                 onSensitivityChange = onSensitivityChange,
                 onLatencyOffsetChange = onLatencyOffsetChange,
+                onOpenCalibration = {
+                    showSettingsSheet = false
+                    showCalibration = true
+                },
                 onDismiss = { showSettingsSheet = false }
+            )
+        }
+
+        if (showCalibration) {
+            CalibrationDialog(
+                sensitivity = uiState.sensitivity,
+                onApplyOffset = onLatencyOffsetChange,
+                onDismiss = { showCalibration = false }
             )
         }
     }
@@ -304,6 +317,7 @@ private fun SettingsSheet(
     uiState: UiState,
     onSensitivityChange: (Float) -> Unit,
     onLatencyOffsetChange: (Int) -> Unit,
+    onOpenCalibration: () -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -335,7 +349,11 @@ private fun SettingsSheet(
                 offsetMs = uiState.latencyOffsetMs,
                 onOffsetChange = onLatencyOffsetChange
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenCalibration, modifier = Modifier.fillMaxWidth()) {
+                Text("Calibrate")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                 Text("Done")
             }
@@ -829,26 +847,47 @@ private fun StatusLabel(state: DetectorState, lastDetected: String) {
 
 @Composable
 private fun LatencyOffsetControl(offsetMs: Int, onOffsetChange: (Int) -> Unit) {
-    val label = when {
-        offsetMs > 0 -> "+${offsetMs}ms"
-        offsetMs < 0 -> "${offsetMs}ms"
-        else -> "0ms"
-    }
+    var inputText by remember(offsetMs) { mutableStateOf(offsetMs.toString()) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "Latency offset: $label",
+            text = "Latency offset",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.secondary
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FilledTonalIconButton(onClick = { onOffsetChange(offsetMs - 10) }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            FilledTonalIconButton(onClick = {
+                val next = offsetMs - 10
+                inputText = next.toString()
+                onOffsetChange(next)
+            }) {
                 Icon(Icons.Filled.Remove, contentDescription = "Decrease offset")
             }
-            FilledTonalIconButton(onClick = { onOffsetChange(offsetMs + 10) }) {
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { raw ->
+                    inputText = raw
+                    raw.toIntOrNull()?.let { onOffsetChange(it) }
+                },
+                suffix = { Text("ms", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.End
+                ),
+                modifier = Modifier.width(96.dp)
+            )
+            FilledTonalIconButton(onClick = {
+                val next = offsetMs + 10
+                inputText = next.toString()
+                onOffsetChange(next)
+            }) {
                 Icon(Icons.Filled.Add, contentDescription = "Increase offset")
             }
         }
