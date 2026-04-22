@@ -30,6 +30,7 @@ data class DetectionEntry(
 
 data class UiState(
     val detectorState: DetectorState = DetectorState.IDLE,
+    val deviceShortId: String = "",
     val lastDetectedTimestamp: String = "",
     val detectionHistory: List<DetectionEntry> = emptyList(),
     val sensitivity: Float = 7f,
@@ -57,6 +58,7 @@ class GunShotViewModel(
 
     private val _uiState = MutableStateFlow(
         UiState(
+            deviceShortId = DeviceIdProvider.shortId(deviceId),
             latencyOffsetMs = userPreferences.latencyOffsetMs,
             username = userPreferences.username
         )

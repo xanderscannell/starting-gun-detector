@@ -6,6 +6,10 @@
 - **Background listening** — app continues detecting while the screen is locked via a foreground service with a persistent notification
 - Screen stays on while the app is in the foreground
 
+### Changed
+- Sidebar subtitle shows device short ID (e.g. `ID: A3F9`) when no username is set, instead of the generic "Detector"
+- Placeholder text in Session tab is now italicised and dimmed to make it more obviously a hint
+
 ---
 
 ## v1.4.0 — 2026-04-21

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -78,6 +79,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -238,7 +240,7 @@ private fun AppDrawerContent(
     uiState: UiState,
     onNavigate: (AppPage) -> Unit
 ) {
-    ModalDrawerSheet {
+    ModalDrawerSheet(modifier = Modifier.width(240.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Starting Gun Detector",
@@ -246,7 +248,7 @@ private fun AppDrawerContent(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = uiState.username.ifBlank { "Detector" },
+                text = uiState.username.ifBlank { "ID: ${uiState.deviceShortId}" },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -587,7 +589,7 @@ private fun SessionPage(
         OutlinedTextField(
             value = uiState.username,
             onValueChange = onUsernameChange,
-            label = { Text("Shown in sessions") },
+            label = { Text("Shown in sessions", fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -613,7 +615,7 @@ private fun SessionPage(
                         val filtered = input.filter { it.isLetterOrDigit() }.uppercase()
                         if (filtered.length <= 4) joinCode = filtered
                     },
-                    placeholder = { Text("A3K9") },
+                    placeholder = { Text("A3K9", fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)) },
                     singleLine = true,
                     enabled = !uiState.sessionLoading,
                     textStyle = TextStyle(
