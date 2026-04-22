@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -49,6 +50,7 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enableEdgeToEdge()
         setContent {
             StartingGunTheme {
@@ -71,7 +73,7 @@ private fun App() {
     val userPreferences = remember { UserPreferences(context) }
     val raceRepository = remember { RaceRepository(File(context.filesDir, "races")) }
     val vm: GunShotViewModel = viewModel(
-        factory = GunShotViewModelFactory(deviceId, sessionRepository, userPreferences)
+        factory = GunShotViewModelFactory(context.applicationContext as android.app.Application, deviceId, sessionRepository, userPreferences)
     )
     val raceVm: RaceViewModel = viewModel(
         factory = RaceViewModelFactory(raceRepository)

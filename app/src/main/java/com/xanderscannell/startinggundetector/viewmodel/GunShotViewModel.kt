@@ -1,8 +1,9 @@
 package com.xanderscannell.startinggundetector.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.xanderscannell.startinggundetector.audio.AudioDetector
+import com.xanderscannell.startinggundetector.audio.ListeningService
 import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import com.xanderscannell.startinggundetector.device.UserPreferences
 import com.xanderscannell.startinggundetector.session.SessionMember
@@ -48,10 +49,11 @@ data class UiState(
 )
 
 class GunShotViewModel(
+    application: Application,
     private val deviceId: String,
     private val sessionRepository: SessionRepository,
     private val userPreferences: UserPreferences
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(
         UiState(
@@ -61,11 +63,11 @@ class GunShotViewModel(
     )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val detector = AudioDetector()
-    private var detectionJob: Job? = null
     private var streamJob: Job? = null
     private var membersJob: Job? = null
     private var waveformIdleJob: Job? = null
+    private var rmsJob: Job? = null
+    private var detectionJob: Job? = null
 
     companion object {
         private const val WAVEFORM_BAR_COUNT = 60
@@ -78,61 +80,6 @@ class GunShotViewModel(
     private val starredKeys = mutableSetOf<String>()
 
     init {
-        detector.onRmsChanged = { rms ->
-            val normalized = (rms / RMS_VISUAL_MAX).coerceIn(0f, 1f)
-            val current = _uiState.value
-            val bars = (current.waveformBars + WaveformBar(normalized))
-                .takeLast(WAVEFORM_BAR_COUNT)
-            _uiState.value = current.copy(waveformBars = bars)
-        }
-
-        detector.onDetected = { event ->
-            val adjusted = event.wallMillis + _uiState.value.latencyOffsetMs
-            val formatted = TimestampFormatter.format(adjusted)
-            val current = _uiState.value
-
-            val updatedBars = if (current.waveformBars.isNotEmpty()) {
-                current.waveformBars.dropLast(1) + current.waveformBars.last().copy(isDetection = true)
-            } else current.waveformBars
-
-            // "Last detected" always reflects this device's own detections only
-            _uiState.value = current.copy(lastDetectedTimestamp = formatted, waveformBars = updatedBars)
-
-            if (current.isInSession && current.sessionCode != null) {
-                // Session mode: write to Firestore; the stream listener owns the history list
-                val displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
-                val serverOffset = current.serverOffsetMs ?: 0L
-                val serverCorrected = adjusted + serverOffset
-                viewModelScope.launch {
-                    try {
-                        sessionRepository.writeDetection(
-                            current.sessionCode, formatted, displayName,
-                            detectionMillis = adjusted,
-                            serverCorrectedMillis = serverCorrected
-                        )
-                    } catch (e: Exception) {
-                        _uiState.value = _uiState.value.copy(
-                            errorMessage = "Failed to sync detection"
-                        )
-                    }
-                }
-            } else {
-                // Solo mode: update history locally.
-                // serverTimestampMillis uses the adjusted wall millis directly — no cross-device
-                // sync needed since gun and capture are on the same device.
-                val entry = DetectionEntry(
-                    timestamp = formatted,
-                    deviceId = deviceId,
-                    displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) },
-                    isMine = true,
-                    serverTimestampMillis = adjusted
-                )
-                _uiState.value = _uiState.value.copy(
-                    detectionHistory = listOf(entry) + _uiState.value.detectionHistory
-                )
-            }
-        }
-
         startIdleWaveform()
     }
 
@@ -150,13 +97,68 @@ class GunShotViewModel(
         }
     }
 
+    private fun startServiceCollectors() {
+        rmsJob?.cancel()
+        rmsJob = viewModelScope.launch {
+            ListeningService.rmsFlow.collect { rms ->
+                if (_uiState.value.detectorState == DetectorState.LISTENING) {
+                    val normalized = (rms / RMS_VISUAL_MAX).coerceIn(0f, 1f)
+                    val current = _uiState.value
+                    val bars = (current.waveformBars + WaveformBar(normalized))
+                        .takeLast(WAVEFORM_BAR_COUNT)
+                    _uiState.value = current.copy(waveformBars = bars)
+                }
+            }
+        }
+
+        detectionJob?.cancel()
+        detectionJob = viewModelScope.launch {
+            ListeningService.detectionFlow.collect { event ->
+                val adjusted = event.wallMillis + _uiState.value.latencyOffsetMs
+                val formatted = TimestampFormatter.format(adjusted)
+                val current = _uiState.value
+
+                val updatedBars = if (current.waveformBars.isNotEmpty()) {
+                    current.waveformBars.dropLast(1) + current.waveformBars.last().copy(isDetection = true)
+                } else current.waveformBars
+
+                _uiState.value = current.copy(lastDetectedTimestamp = formatted, waveformBars = updatedBars)
+
+                if (current.isInSession && current.sessionCode != null) {
+                    val displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                    val serverOffset = current.serverOffsetMs ?: 0L
+                    val serverCorrected = adjusted + serverOffset
+                    try {
+                        sessionRepository.writeDetection(
+                            current.sessionCode, formatted, displayName,
+                            detectionMillis = adjusted,
+                            serverCorrectedMillis = serverCorrected
+                        )
+                    } catch (e: Exception) {
+                        _uiState.value = _uiState.value.copy(errorMessage = "Failed to sync detection")
+                    }
+                } else {
+                    val entry = DetectionEntry(
+                        timestamp = formatted,
+                        deviceId = deviceId,
+                        displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) },
+                        isMine = true,
+                        serverTimestampMillis = adjusted
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        detectionHistory = listOf(entry) + _uiState.value.detectionHistory
+                    )
+                }
+            }
+        }
+    }
+
     // ── Listening ────────────────────────────────────────────
 
     fun startListening() {
         if (_uiState.value.detectorState != DetectorState.IDLE) return
         waveformIdleJob?.cancel()
         waveformIdleJob = null
-        detector.sensitivityMultiplier = sliderToMultiplier(_uiState.value.sensitivity)
         _uiState.value = _uiState.value.copy(
             detectorState = DetectorState.LISTENING,
             errorMessage = null
@@ -167,22 +169,14 @@ class GunShotViewModel(
                 try { sessionRepository.updateListeningStatus(sessionCode, true) } catch (_: Exception) {}
             }
         }
-        detectionJob = viewModelScope.launch {
-            try {
-                detector.run()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    detectorState = DetectorState.IDLE,
-                    errorMessage = "Audio error: ${e.message}"
-                )
-                startIdleWaveform()
-            }
-        }
+        startServiceCollectors()
+        ListeningService.start(getApplication(), sliderToMultiplier(_uiState.value.sensitivity))
     }
 
     fun stopListening() {
+        ListeningService.stop(getApplication())
+        rmsJob?.cancel()
+        rmsJob = null
         detectionJob?.cancel()
         detectionJob = null
         _uiState.value = _uiState.value.copy(detectorState = DetectorState.IDLE)
@@ -369,10 +363,11 @@ class GunShotViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        detectionJob?.cancel()
         streamJob?.cancel()
         membersJob?.cancel()
         waveformIdleJob?.cancel()
+        rmsJob?.cancel()
+        detectionJob?.cancel()
     }
 
     private fun sliderToMultiplier(slider: Float): Float {

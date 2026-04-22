@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Background listening** — app continues detecting while the screen is locked via a foreground service with a persistent notification
+- Screen stays on while the app is in the foreground
+
+---
+
 ## v1.4.0 — 2026-04-21
 
 ### Added
