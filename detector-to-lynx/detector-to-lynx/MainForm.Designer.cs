@@ -187,6 +187,7 @@
             ClientSize = new Size(584, 495);
             MinimumSize = new Size(500, 480);
             Text = "Detector to Lynx";
+            Icon = new System.Drawing.Icon(Path.Combine(AppContext.BaseDirectory, "win_icon.ico"));
             Controls.Add(sessionGroupBox);
             Controls.Add(detectionsGroupBox);
             Controls.Add(settingsGroupBox);
