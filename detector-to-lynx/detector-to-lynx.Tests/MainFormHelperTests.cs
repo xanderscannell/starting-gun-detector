@@ -56,5 +56,13 @@ namespace detector_to_lynx.Tests
             var adjusted = MainForm.ApplyOffsetToTimeString("00:00:00.050", -100.0);
             Assert.Equal("23:59:59.950", adjusted);
         }
+
+        [Fact]
+        public void ComputeOffset_SubSecondTimestamp_IncludesMilliseconds()
+        {
+            var now = new DateTime(2026, 4, 22, 14, 0, 1, 0); // 14:00:01.000
+            var offset = MainForm.ComputeOffset("14:00:00.500", now);
+            Assert.Equal(0.5, offset, precision: 3);
+        }
     }
 }

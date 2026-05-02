@@ -8,8 +8,8 @@ namespace detector_to_lynx
     /// <see cref="StartTimesChanged"/> whenever the set of parsed start times changes.
     ///
     /// Thread-safety: <see cref="SetDirectory"/> and <see cref="Dispose"/> may be called
-    /// from any thread. The <see cref="StartTimesChanged"/> event is always raised on the
-    /// UI (synchronization) context that was current when this object was constructed.
+    /// from any thread. The <see cref="StartTimesChanged"/> event is raised on a thread-pool
+    /// thread; subscribers must marshal to the UI thread (e.g. <c>InvokeRequired</c> / <c>BeginInvoke</c>).
     /// </summary>
     public sealed class LifDirectoryMonitor : IDisposable
     {

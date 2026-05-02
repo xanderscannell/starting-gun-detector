@@ -276,5 +276,30 @@ namespace detector_to_lynx.Tests
             var result = CalibrationMatcher.Match([det], []);
             Assert.Null(result.Rows.Single().ResidualMs(0));
         }
+
+        [Fact]
+        public void Match_LynxOnlyRow_InterleavedBetweenMatchedPairs()
+        {
+            // Detection at 10:00 and 10:10 both match; Lynx-only at 10:05 sits between.
+            var detections = new[] { T.At(10, 0, 0), T.At(10, 10, 0) };
+            var lynx = new[]
+            {
+                T.At(10, 0, 0, 200),  // matches 10:00:00 detection
+                T.At(10, 5, 0),        // no detection within window — unmatched
+                T.At(10, 10, 0, 200),  // matches 10:10:00 detection
+            };
+
+            var result = CalibrationMatcher.Match(detections, lynx);
+
+            Assert.Equal(2, result.PairCount);
+            Assert.Equal(3, result.Rows.Count);
+            // Middle row should be the Lynx-only entry.
+            Assert.False(result.Rows[1].IsMatched);
+            Assert.Equal(T.At(10, 5, 0), result.Rows[1].LynxStart);
+            Assert.False(result.Rows[1].Detection.HasValue);
+            // All rows still in chronological order.
+            var times = result.Rows.Select(r => r.Detection ?? r.LynxStart ?? TimeSpan.Zero).ToList();
+            Assert.Equal(times.OrderBy(t => t).ToList(), times);
+        }
     }
 }

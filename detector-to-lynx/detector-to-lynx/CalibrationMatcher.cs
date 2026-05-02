@@ -1,16 +1,6 @@
 namespace detector_to_lynx
 {
     /// <summary>
-    /// One matched pair: a detection time aligned with a FinishLynx start time,
-    /// plus the residual error remaining after the computed offset is applied.
-    /// </summary>
-    public record MatchedPair(TimeSpan Detection, TimeSpan LynxStart)
-    {
-        /// <summary>Raw offset for this pair: LynxStart − Detection (milliseconds).</summary>
-        public double RawOffsetMs => (LynxStart - Detection).TotalMilliseconds;
-    }
-
-    /// <summary>
     /// A row in the calibration table. Exactly one of Detection / LynxStart may be null
     /// when it has no counterpart.
     /// </summary>
@@ -81,8 +71,8 @@ namespace detector_to_lynx
             var sortedDetections = detections.OrderBy(t => t).ToList();
             var sortedLynx = lynxStartTimes.OrderBy(t => t).ToList();
 
-            var matchedPairs = new List<MatchedPair>();
-            var usedDetectionIndices = new HashSet<int>();
+            // Each element stores the sorted indices of the matched pair: (di, li).
+            var matchedIndices = new List<(int di, int li)>();
             var usedLynxIndices = new HashSet<int>();
 
             // For each detection, find the nearest unmatched Lynx start within the window.
@@ -109,47 +99,24 @@ namespace detector_to_lynx
 
                 if (bestLi >= 0)
                 {
-                    matchedPairs.Add(new MatchedPair(detection, sortedLynx[bestLi]));
-                    usedDetectionIndices.Add(di);
+                    matchedIndices.Add((di, bestLi));
                     usedLynxIndices.Add(bestLi);
                 }
             }
 
             // Compute offset = mean(LynxStart − Detection) across all matched pairs.
-            double offsetMs = matchedPairs.Count > 0
-                ? matchedPairs.Average(p => p.RawOffsetMs)
+            double offsetMs = matchedIndices.Count > 0
+                ? matchedIndices.Average(p => (sortedLynx[p.li] - sortedDetections[p.di]).TotalMilliseconds)
                 : 0.0;
 
-            // Build the ordered row list.
-            // Strategy: walk through detections in time order. When a detection is matched,
-            // emit a matched row. When a Lynx time falls *before* the next detection (or
-            // there are no more detections), emit the Lynx-only row first.
+            // Build index lookups for the merge walk.
+            var detectionToLynx = matchedIndices.ToDictionary(p => p.di, p => p.li);
+            var lynxToDetection = matchedIndices.ToDictionary(p => p.li, p => p.di);
+
             var rows = new List<CalibrationRow>();
 
             int dIdx = 0; // index into sortedDetections
             int lIdx = 0; // index into sortedLynx
-
-            // Map matched detection → its Lynx partner (by sorted index).
-            // Build a lookup: detection-index → lynx-index for matched pairs.
-            // We need this for O(1) lookup during merge.
-            var detectionToLynx = new Dictionary<int, int>();
-            var lynxToDetection = new Dictionary<int, int>();
-            {
-                // Match pairs correlate by value; rebuild index map.
-                // Since sortedDetections and sortedLynx are sorted, we can recover the
-                // indices by tracking which (detection, lynx) pair maps to which indices.
-                var usedD = new HashSet<int>();
-                var usedL = new HashSet<int>();
-                foreach (var pair in matchedPairs)
-                {
-                    int di2 = IndexOf(sortedDetections, pair.Detection, usedD);
-                    int li2 = IndexOf(sortedLynx, pair.LynxStart, usedL);
-                    detectionToLynx[di2] = li2;
-                    lynxToDetection[li2] = di2;
-                    usedD.Add(di2);
-                    usedL.Add(li2);
-                }
-            }
 
             // Merge-walk both sorted lists to produce time-ordered rows.
             while (dIdx < sortedDetections.Count || lIdx < sortedLynx.Count)
@@ -165,9 +132,6 @@ namespace detector_to_lynx
                         rows.Add(new CalibrationRow(sortedDetections[dIdx], sortedLynx[matchedLi]));
                         // Skip past the Lynx index if it comes next in the Lynx stream.
                         if (lIdx == matchedLi) lIdx++;
-                        // Advance past any Lynx-only rows that fall before the matched Lynx time.
-                        // (Those would be emitted before this matched row in the merge walk,
-                        //  handled by the else branch below as lIdx catches up.)
                     }
                     else
                     {
@@ -177,7 +141,7 @@ namespace detector_to_lynx
                 }
                 else
                 {
-                    // Emit Lynx-only row (already emitting matched Lynx rows via detection side above).
+                    // Emit Lynx-only rows; matched Lynx rows are emitted via the detection side above.
                     if (!lynxToDetection.ContainsKey(lIdx))
                         rows.Add(new CalibrationRow(null, sortedLynx[lIdx]));
                     lIdx++;
@@ -185,17 +149,6 @@ namespace detector_to_lynx
             }
 
             return new MatchResult(rows, offsetMs);
-        }
-
-        // Returns the first index of `value` in `list` that is not in `skip`.
-        private static int IndexOf<T>(List<T> list, T value, HashSet<int> skip)
-        {
-            for (int i = 0; i < list.Count; i++)
-            {
-                if (!skip.Contains(i) && EqualityComparer<T>.Default.Equals(list[i], value))
-                    return i;
-            }
-            return -1; // should never happen if inputs are consistent
         }
     }
 }

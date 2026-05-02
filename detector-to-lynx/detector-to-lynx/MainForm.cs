@@ -227,8 +227,13 @@ namespace detector_to_lynx
             if (double.TryParse(matchWindowTextBox.Text.Trim(), NumberStyles.Any,
                     CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
             {
+                matchWindowTextBox.BackColor = SystemColors.Window;
                 SavedSettingsManager.MatchWindowSeconds = seconds;
                 RebuildCalibrationGrid();
+            }
+            else
+            {
+                matchWindowTextBox.BackColor = Color.MistyRose;
             }
         }
 
@@ -502,7 +507,7 @@ namespace detector_to_lynx
                 throw new FormatException($"Cannot parse time string: {timeString}");
 
             var startDateTime = new DateTime(now.Year, now.Month, now.Day,
-                timeOfDay.Hours, timeOfDay.Minutes, timeOfDay.Seconds);
+                timeOfDay.Hours, timeOfDay.Minutes, timeOfDay.Seconds, timeOfDay.Milliseconds);
 
             if (startDateTime > now)
                 return 0;

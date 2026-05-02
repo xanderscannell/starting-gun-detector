@@ -27,14 +27,14 @@ namespace detector_to_lynx
             await stream.WriteAsync(request, 0, request.Length).ConfigureAwait(false);
             await stream.FlushAsync().ConfigureAwait(false);
 
-            client.ReceiveTimeout = timeoutMs;
+            using var cts = new CancellationTokenSource(timeoutMs);
 
             var buffer = new byte[4096];
             var responseBuilder = new StringBuilder();
 
             while (true)
             {
-                var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token).ConfigureAwait(false);
                 if (bytesRead == 0)
                     break;
 
