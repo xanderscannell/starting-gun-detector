@@ -44,27 +44,6 @@ namespace detector_to_lynx.Tests
         }
 
         [Fact]
-        public void ComputeCalibrationOffsetMilliseconds_FinishAhead_ReturnsPositive()
-        {
-            var offset = MainForm.ComputeCalibrationOffsetMilliseconds("10:00:00.000", "10:00:00.250");
-            Assert.Equal(250.0, offset, precision: 3);
-        }
-
-        [Fact]
-        public void ComputeCalibrationOffsetMilliseconds_FinishBehind_ReturnsNegative()
-        {
-            var offset = MainForm.ComputeCalibrationOffsetMilliseconds("10:00:00.300", "10:00:00.100");
-            Assert.Equal(-200.0, offset, precision: 3);
-        }
-
-        [Fact]
-        public void ComputeCalibrationOffsetMilliseconds_MidnightWrap_UsesNearestDifference()
-        {
-            var offset = MainForm.ComputeCalibrationOffsetMilliseconds("23:59:59.900", "00:00:00.100");
-            Assert.Equal(200.0, offset, precision: 3);
-        }
-
-        [Fact]
         public void ApplyOffsetToTimeString_PositiveOffset_AdjustsTime()
         {
             var adjusted = MainForm.ApplyOffsetToTimeString("10:00:00.000", 125.0);

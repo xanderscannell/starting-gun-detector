@@ -1,13 +1,32 @@
 # Project Status
 
-**Last updated**: 2026-04-21
+**Last updated**: 2026-05-02
 
 ## Current Position
 
-**Phase**: Phase 7 complete — Race file persistence system shipped
-**Progress**: 100% — all planned features implemented
+**Phase**: Phase 8 — detector-to-lynx companion app (automated LIF calibration shipped)
+**Progress**: Core calibration feature complete; future items tracked in MASTER_PLAN
 
-## Recently Completed (2026-04-21 session)
+## Recently Completed (2026-05-02 session)
+
+- **detector-to-lynx: automated LIF calibration**
+  - `LifFileParser.cs` — parses start time from `.lif` header row field 10 (4 decimal places truncated to ms)
+  - `CalibrationMatcher.cs` — greedy nearest-neighbour; produces `MatchResult` with `CalibrationRow[]`, `OffsetMs`, residuals
+  - `LifDirectoryMonitor.cs` — `FileSystemWatcher` with 300ms debounce; posts to UI thread via `SynchronizationContext`
+  - `SavedSettingsManager` — added `LynxResultsDirectory` (string) and `MatchWindowSeconds` (double, default 10.0)
+  - `MainForm.Designer.cs` — replaced detection `ListBox` + manual calibration controls with `DataGridView`; added "Lynx Results Directory" group box with Browse + match window field
+  - `MainForm.cs` — removed `_calibrationOffsetsMsByClientTimestamp`; added `_lifMonitor`, `_lastMatchResult`, `_rowToDetection`; `RebuildCalibrationGrid()` runs on every detection poll and every `.lif` file change
+  - Removed `ComputeCalibrationOffsetMilliseconds()` and its 3 tests (superseded)
+  - 10 `LifFileParserTests` + 20 `CalibrationMatcherTests` — all 60 tests pass
+
+## Previously Completed (2026-04-29 session)
+
+- **Session export utility**
+  - Added `scripts/export_session_start_times.py` to export all Firestore detections for a session to a CSV file
+  - Uses the existing `sessions/{sessionCode}/detections` schema and prefers `serverCorrectedMillis` when present
+  - Writes structured CSV rows with display name, formatted time, raw millis, and Firestore timestamp fallback
+
+## Previously Completed (2026-04-21 session)
 
 - **Phase 7: Race File Persistence System**
   - Added `kotlinx-serialization-json` dependency
@@ -61,6 +80,8 @@ app/src/main/java/com/xanderscannell/startinggundetector/
     ├── GunShotViewModelFactory.kt     [complete]
     ├── RaceViewModel.kt               [complete] ← NEW
     └── RaceViewModelFactory.kt        [complete] ← NEW
+scripts/
+└── export_session_start_times.py      [complete] ← NEW
 ```
 
 ## Open Questions

@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using System.Reflection;
 using System.Globalization;
+using System.Reflection;
 
 namespace detector_to_lynx
 {
@@ -10,7 +10,12 @@ namespace detector_to_lynx
         private System.Windows.Forms.Timer? _pollTimer;
         private string? _sessionCode;
         private List<DetectionEntry> _lastDetections = [];
-        private readonly Dictionary<long, double> _calibrationOffsetsMsByClientTimestamp = [];
+
+        private readonly LifDirectoryMonitor _lifMonitor = new();
+        private MatchResult? _lastMatchResult;
+
+        // Maps DataGridView row index → DetectionEntry (null = Lynx-only row).
+        private readonly Dictionary<int, DetectionEntry?> _rowToDetection = [];
 
         public MainForm()
         {
@@ -18,13 +23,23 @@ namespace detector_to_lynx
             LoadSavedSettings();
             AppendVersionToTitle();
             UpdateCalibrationSummaryLabel();
-            UpdateCalibrationControlsState();
+
+            _lifMonitor.StartTimesChanged += OnLynxStartTimesChanged;
         }
 
         private void LoadSavedSettings()
         {
             sessionCodeTextBox.Text = SavedSettingsManager.SessionCode;
             lynxPortTextBox.Text = SavedSettingsManager.LynxRemotePortString;
+            matchWindowTextBox.Text = SavedSettingsManager.MatchWindowSeconds.ToString("G", CultureInfo.InvariantCulture);
+
+            var dir = SavedSettingsManager.LynxResultsDirectory;
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                lynxResultsDirTextBox.Text = dir;
+                _lifMonitor.SetDirectory(dir);
+                UpdateLynxResultsStatus();
+            }
         }
 
         private void AppendVersionToTitle()
@@ -97,17 +112,16 @@ namespace detector_to_lynx
             StopPolling();
             _sessionCode = null;
             _lastDetections.Clear();
-            _calibrationOffsetsMsByClientTimestamp.Clear();
-            detectionsListBox.Items.Clear();
+            _lastMatchResult = null;
+            _rowToDetection.Clear();
+            calibrationGridView.Rows.Clear();
             joinButton.Text = "Join Session";
             sessionCodeTextBox.Enabled = true;
             sessionStatusLabel.Text = "Not connected";
             sessionStatusLabel.ForeColor = SystemColors.GrayText;
             selectedTimeLabel.Text = "Selected: —";
-            matchingTimeTextBox.Text = string.Empty;
             sendToLynxButton.Enabled = false;
             UpdateCalibrationSummaryLabel();
-            UpdateCalibrationControlsState();
             UpdateStatus("Left session.");
         }
 
@@ -141,48 +155,160 @@ namespace detector_to_lynx
             catch (Exception ex)
             {
                 Debug.Print("Poll failed: " + ex.Message);
-                return; // Silently skip failed polls; status will update on next success
+                return;
             }
 
-            // Update list only when content changes
             if (detections.Count == _lastDetections.Count &&
                 detections.Select(d => d.ClientTimestamp).SequenceEqual(
                     _lastDetections.Select(d => d.ClientTimestamp)))
                 return;
 
             _lastDetections = detections;
+            RebuildCalibrationGrid();
+        }
 
-            var selectedTimestamp = (detectionsListBox.SelectedItem as string)?.Split(" — ")[0].Trim();
+        // ─── Lynx directory / matching ───────────────────────────────────────
 
-            detectionsListBox.BeginUpdate();
-            detectionsListBox.Items.Clear();
-            foreach (var d in detections)
-                detectionsListBox.Items.Add($"{d.Timestamp} — {d.DisplayName}");
-            detectionsListBox.EndUpdate();
+        private void browseResultsDirButton_Click(object sender, EventArgs e)
+        {
+            using var dialog = new FolderBrowserDialog
+            {
+                Description = "Select the FinishLynx results directory",
+                UseDescriptionForTitle = true,
+                SelectedPath = SavedSettingsManager.LynxResultsDirectory
+            };
 
-            // Restore selection if it still exists
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            var path = dialog.SelectedPath;
+            SavedSettingsManager.LynxResultsDirectory = path;
+            lynxResultsDirTextBox.Text = path;
+            _lifMonitor.SetDirectory(path);
+            UpdateLynxResultsStatus();
+            RebuildCalibrationGrid();
+        }
+
+        private void OnLynxStartTimesChanged(IReadOnlyList<LynxStartEntry> entries)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(() => OnLynxStartTimesChanged(entries));
+                return;
+            }
+            UpdateLynxResultsStatus();
+            RebuildCalibrationGrid();
+        }
+
+        private void UpdateLynxResultsStatus()
+        {
+            var entries = _lifMonitor.CurrentStartTimes;
+            var dir = SavedSettingsManager.LynxResultsDirectory;
+
+            if (string.IsNullOrWhiteSpace(dir))
+            {
+                lynxResultsStatusLabel.Text = "Not watching";
+                lynxResultsStatusLabel.ForeColor = SystemColors.GrayText;
+            }
+            else if (!Directory.Exists(dir))
+            {
+                lynxResultsStatusLabel.Text = "Directory not found";
+                lynxResultsStatusLabel.ForeColor = Color.OrangeRed;
+            }
+            else
+            {
+                lynxResultsStatusLabel.Text =
+                    $"Watching: {entries.Count} .lif file{(entries.Count != 1 ? "s" : "")} with start times";
+                lynxResultsStatusLabel.ForeColor = entries.Count > 0 ? Color.Green : SystemColors.GrayText;
+            }
+        }
+
+        private void matchWindowTextBox_TextChanged(object sender, EventArgs e)
+        {
+            if (double.TryParse(matchWindowTextBox.Text.Trim(), NumberStyles.Any,
+                    CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+            {
+                SavedSettingsManager.MatchWindowSeconds = seconds;
+                RebuildCalibrationGrid();
+            }
+        }
+
+        // ─── Calibration grid ────────────────────────────────────────────────
+
+        private void RebuildCalibrationGrid()
+        {
+            var lynxTimes = _lifMonitor.CurrentStartTimes
+                .Select(e => e.StartTime)
+                .Distinct()
+                .ToList();
+
+            var detectionTimes = new List<TimeSpan>();
+            foreach (var d in _lastDetections)
+            {
+                if (TryParseTimeOfDay(d.Timestamp, out var ts))
+                    detectionTimes.Add(ts);
+            }
+
+            var windowMs = SavedSettingsManager.MatchWindowSeconds * 1000.0;
+            var match = CalibrationMatcher.Match(detectionTimes, lynxTimes, windowMs);
+            _lastMatchResult = match;
+
+            // Preserve selected detection timestamp before rebuild.
+            var selectedTimestamp = GetSelectedDetectionTimestamp();
+
+            calibrationGridView.SuspendLayout();
+            calibrationGridView.Rows.Clear();
+            _rowToDetection.Clear();
+
+            foreach (var row in match.Rows.AsEnumerable().Reverse())
+            {
+                var detectionCell = row.Detection.HasValue ? FormatTimeSpan(row.Detection.Value) : "—";
+                var lynxCell = row.LynxStart.HasValue ? FormatTimeSpan(row.LynxStart.Value) : "—";
+                var diffCell = row.IsMatched && row.ResidualMs(match.OffsetMs) is double res
+                    ? FormatResidual(res)
+                    : "—";
+
+                // Resolve matching DetectionEntry for this row.
+                DetectionEntry? entry = null;
+                if (row.Detection.HasValue)
+                {
+                    var formatted = FormatTimeSpan(row.Detection.Value);
+                    entry = _lastDetections.FirstOrDefault(d => d.Timestamp == formatted);
+                }
+
+                var deviceCell = entry?.DisplayName ?? string.Empty;
+
+                int rowIdx = calibrationGridView.Rows.Add(detectionCell, lynxCell, diffCell, deviceCell);
+                _rowToDetection[rowIdx] = entry;
+
+                // Tint Lynx-only rows.
+                if (!row.Detection.HasValue)
+                    calibrationGridView.Rows[rowIdx].DefaultCellStyle.BackColor = Color.FromArgb(245, 245, 255);
+            }
+
+            calibrationGridView.ResumeLayout();
+
+            // Restore selection.
             if (selectedTimestamp != null)
             {
-                for (int i = 0; i < detectionsListBox.Items.Count; i++)
+                foreach (DataGridViewRow r in calibrationGridView.Rows)
                 {
-                    if (detectionsListBox.Items[i].ToString()?.StartsWith(selectedTimestamp) == true)
+                    if (r.Cells["colDetection"].Value?.ToString() == selectedTimestamp)
                     {
-                        detectionsListBox.SelectedIndex = i;
+                        r.Selected = true;
                         break;
                     }
                 }
             }
+
+            UpdateCalibrationSummaryLabel();
         }
 
-        // ─── Detection selection ─────────────────────────────────────────────
-
-        private void detectionsListBox_SelectedIndexChanged(object sender, EventArgs e)
+        private void calibrationGridView_SelectionChanged(object sender, EventArgs e)
         {
-            var selected = detectionsListBox.SelectedItem as string;
-            if (selected != null)
+            var detection = GetSelectedDetectionEntry();
+            if (detection != null)
             {
-                var timestamp = selected.Split(" — ")[0].Trim();
-                selectedTimeLabel.Text = $"Selected: {timestamp}";
+                selectedTimeLabel.Text = $"Selected: {detection.Timestamp}";
                 sendToLynxButton.Enabled = true;
             }
             else
@@ -190,65 +316,25 @@ namespace detector_to_lynx
                 selectedTimeLabel.Text = "Selected: —";
                 sendToLynxButton.Enabled = false;
             }
-
-            UpdateCalibrationControlsState();
         }
 
-        private void matchingTimeTextBox_TextChanged(object sender, EventArgs e)
+        private DetectionEntry? GetSelectedDetectionEntry()
         {
-            UpdateCalibrationControlsState();
+            if (calibrationGridView.SelectedRows.Count == 0) return null;
+            var rowIdx = calibrationGridView.SelectedRows[0].Index;
+            _rowToDetection.TryGetValue(rowIdx, out var entry);
+            return entry; // null if Lynx-only row or index not found
         }
 
-        private void calibrateButton_Click(object sender, EventArgs e)
-        {
-            if (!TryGetSelectedDetection(out var selectedDetection))
-                return;
-
-            var detectionTime = selectedDetection.Timestamp;
-            var finishLynxTime = matchingTimeTextBox.Text.Trim();
-
-            double offsetMs;
-            try
-            {
-                offsetMs = ComputeCalibrationOffsetMilliseconds(detectionTime, finishLynxTime);
-            }
-            catch (FormatException)
-            {
-                MessageBox.Show(
-                    "Please enter a valid FinishLynx time in HH:mm:ss.fff format.",
-                    "Invalid Time",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                UpdateCalibrationControlsState();
-                return;
-            }
-
-            _calibrationOffsetsMsByClientTimestamp[selectedDetection.ClientTimestamp] = offsetMs;
-
-            UpdateCalibrationSummaryLabel();
-            UpdateCalibrationControlsState();
-
-            var signedSeconds = offsetMs / 1000.0;
-            UpdateStatus($"Calibration saved: {signedSeconds:+0.000;-0.000;0.000}s");
-        }
-
-        private void clearCalibrationsButton_Click(object sender, EventArgs e)
-        {
-            _calibrationOffsetsMsByClientTimestamp.Clear();
-            UpdateCalibrationSummaryLabel();
-            UpdateCalibrationControlsState();
-            UpdateStatus("Calibration offsets cleared.");
-        }
+        private string? GetSelectedDetectionTimestamp() => GetSelectedDetectionEntry()?.Timestamp;
 
         // ─── Send to FinishLynx ───────────────────────────────────────────────
 
         private void sendToLynxButton_Click(object sender, EventArgs e)
         {
-            if (!TryGetSelectedDetection(out var selectedDetection))
-                return;
-
-            _ = CreateStartAsync(selectedDetection.Timestamp);
+            var detection = GetSelectedDetectionEntry();
+            if (detection == null) return;
+            _ = CreateStartAsync(detection.Timestamp);
         }
 
         private async Task CreateStartAsync(string timeString)
@@ -256,9 +342,9 @@ namespace detector_to_lynx
             var lynxService = new FinishLynxRemoteService(SavedSettingsManager.LynxRemotePort);
             FinishLynxReply status;
             string response;
-            var averageOffsetMs = GetAverageCalibrationOffsetMilliseconds();
+            var averageOffsetMs = _lastMatchResult?.OffsetMs ?? 0.0;
             var adjustedTimeString = ApplyOffsetToTimeString(timeString, averageOffsetMs);
-            var hasCalibration = _calibrationOffsetsMsByClientTimestamp.Count > 0;
+            var hasCalibration = (_lastMatchResult?.PairCount ?? 0) > 0;
 
             sendToLynxButton.Enabled = false;
             UpdateStatus("Sending to FinishLynx...");
@@ -269,7 +355,7 @@ namespace detector_to_lynx
             }
             catch (Exception ex)
             {
-                sendToLynxButton.Enabled = detectionsListBox.SelectedIndex >= 0;
+                sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
                 UpdateStatus("Failed to connect to FinishLynx.", error: true);
                 MessageBox.Show(
                     $"Failed to connect to FinishLynx Remote Control:\n{ex.Message}\n\n" +
@@ -281,19 +367,14 @@ namespace detector_to_lynx
 
             if (status == FinishLynxReply.Ok)
             {
-                sendToLynxButton.Enabled = detectionsListBox.SelectedIndex >= 0;
-                if (hasCalibration)
-                {
-                    UpdateStatus($"Start created in FinishLynx: {adjustedTimeString} (calibrated from {timeString})");
-                }
-                else
-                {
-                    UpdateStatus($"Start created in FinishLynx: {adjustedTimeString}");
-                }
+                sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
+                UpdateStatus(hasCalibration
+                    ? $"Start created in FinishLynx: {adjustedTimeString} (calibrated from {timeString})"
+                    : $"Start created in FinishLynx: {adjustedTimeString}");
                 return;
             }
 
-            // TOD start failed — try offset fallback
+            // TOD start failed — try offset fallback.
             double offsetSeconds;
             try
             {
@@ -301,7 +382,7 @@ namespace detector_to_lynx
             }
             catch
             {
-                sendToLynxButton.Enabled = detectionsListBox.SelectedIndex >= 0;
+                sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
                 UpdateStatus("Failed to create start.", error: true);
                 MessageBox.Show(
                     $"Could not parse timestamp '{timeString}' and the time-of-day start was rejected by FinishLynx.\n\nResponse: {response}",
@@ -317,25 +398,20 @@ namespace detector_to_lynx
             }
             catch (Exception ex)
             {
-                sendToLynxButton.Enabled = detectionsListBox.SelectedIndex >= 0;
+                sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
                 UpdateStatus("Failed to connect to FinishLynx.", error: true);
                 MessageBox.Show($"Failed to connect to FinishLynx:\n{ex.Message}",
                     "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            sendToLynxButton.Enabled = detectionsListBox.SelectedIndex >= 0;
+            sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
 
             if (status == FinishLynxReply.Ok)
             {
-                if (hasCalibration)
-                {
-                    UpdateStatus($"Start created in FinishLynx (offset): {adjustedTimeString} (calibrated from {timeString})");
-                }
-                else
-                {
-                    UpdateStatus($"Start created in FinishLynx (offset): {adjustedTimeString}");
-                }
+                UpdateStatus(hasCalibration
+                    ? $"Start created in FinishLynx (offset): {adjustedTimeString} (calibrated from {timeString})"
+                    : $"Start created in FinishLynx (offset): {adjustedTimeString}");
             }
             else
             {
@@ -345,51 +421,48 @@ namespace detector_to_lynx
             }
         }
 
-        private bool TryGetSelectedDetection(out DetectionEntry detection)
-        {
-            var index = detectionsListBox.SelectedIndex;
-            if (index >= 0 && index < _lastDetections.Count)
-            {
-                detection = _lastDetections[index];
-                return true;
-            }
-
-            detection = default!;
-            return false;
-        }
-
-        private double GetAverageCalibrationOffsetMilliseconds()
-        {
-            if (_calibrationOffsetsMsByClientTimestamp.Count == 0)
-                return 0;
-
-            return _calibrationOffsetsMsByClientTimestamp.Values.Average();
-        }
+        // ─── Calibration summary ─────────────────────────────────────────────
 
         private void UpdateCalibrationSummaryLabel()
         {
-            if (_calibrationOffsetsMsByClientTimestamp.Count == 0)
+            var match = _lastMatchResult;
+            if (match == null || match.PairCount == 0)
             {
                 calibrationSummaryLabel.Text = "Calibration offset: none";
                 return;
             }
 
-            var avgSeconds = GetAverageCalibrationOffsetMilliseconds() / 1000.0;
-            calibrationSummaryLabel.Text = $"Calibration offset: {avgSeconds:+0.000;-0.000;0.000}s ({_calibrationOffsetsMsByClientTimestamp.Count} samples)";
+            var offsetSec = match.OffsetMs / 1000.0;
+            var residuals = match.MatchedRows
+                .Select(r => r.ResidualMs(match.OffsetMs))
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .ToList();
+
+            if (residuals.Count == 0)
+            {
+                calibrationSummaryLabel.Text =
+                    $"Calibration offset: {offsetSec:+0.000;-0.000;0.000}s ({match.PairCount} pairs)";
+                return;
+            }
+
+            var maxAbs = residuals.Max(Math.Abs);
+            var avgAbs = residuals.Average(Math.Abs);
+            calibrationSummaryLabel.Text =
+                $"Offset: {offsetSec:+0.000;-0.000;0.000}s ({match.PairCount} pairs)  " +
+                $"Residuals: max ±{maxAbs:F0}ms  avg ±{avgAbs:F0}ms";
         }
 
-        private void UpdateCalibrationControlsState()
-        {
-            var hasSelection = TryGetSelectedDetection(out _);
-            var hasValidMatchingTime = IsValidTimeOfDay(matchingTimeTextBox.Text.Trim());
+        // ─── Helpers ─────────────────────────────────────────────────────────
 
-            calibrateButton.Enabled = hasSelection && hasValidMatchingTime;
-            clearCalibrationsButton.Enabled = _calibrationOffsetsMsByClientTimestamp.Count > 0;
-        }
+        private static string FormatTimeSpan(TimeSpan t) =>
+            t.ToString(@"hh\:mm\:ss\.fff", CultureInfo.InvariantCulture);
 
-        private static bool IsValidTimeOfDay(string value)
+        private static string FormatResidual(double ms)
         {
-            return TryParseTimeOfDay(value, out _);
+            if (Math.Abs(ms) < 1000)
+                return $"{ms:+0;-0;0}ms";
+            return $"{ms / 1000.0:+0.000;-0.000;0.000}s";
         }
 
         private static bool TryParseTimeOfDay(string value, out TimeSpan timeOfDay)
@@ -400,24 +473,6 @@ namespace detector_to_lynx
                        CultureInfo.InvariantCulture,
                        out timeOfDay)
                    || TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out timeOfDay);
-        }
-
-        public static double ComputeCalibrationOffsetMilliseconds(string detectionTimeString, string finishLynxTimeString)
-        {
-            if (!TryParseTimeOfDay(detectionTimeString, out var detection))
-                throw new FormatException($"Cannot parse time string: {detectionTimeString}");
-
-            if (!TryParseTimeOfDay(finishLynxTimeString, out var finishLynx))
-                throw new FormatException($"Cannot parse time string: {finishLynxTimeString}");
-
-            var difference = finishLynx - detection;
-
-            if (difference > TimeSpan.FromHours(12))
-                difference -= TimeSpan.FromDays(1);
-            else if (difference < TimeSpan.FromHours(-12))
-                difference += TimeSpan.FromDays(1);
-
-            return difference.TotalMilliseconds;
         }
 
         public static string ApplyOffsetToTimeString(string timeString, double offsetMilliseconds)
@@ -478,6 +533,7 @@ namespace detector_to_lynx
             try
             {
                 StopPolling();
+                _lifMonitor.Dispose();
             }
             catch { }
             base.OnFormClosing(e);

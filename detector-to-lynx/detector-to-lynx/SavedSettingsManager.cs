@@ -38,6 +38,18 @@ namespace detector_to_lynx
             }
         }
 
+        public static string LynxResultsDirectory
+        {
+            get => Current.LynxResultsDirectory;
+            set { Current.LynxResultsDirectory = value; Save(); }
+        }
+
+        public static double MatchWindowSeconds
+        {
+            get => Current.MatchWindowSeconds;
+            set { Current.MatchWindowSeconds = value; Save(); }
+        }
+
         private static Settings Load()
         {
             try
@@ -73,6 +85,8 @@ namespace detector_to_lynx
         {
             public string SessionCode { get; set; } = string.Empty;
             public int LynxRemotePort { get; set; } = 7100;
+            public string LynxResultsDirectory { get; set; } = string.Empty;
+            public double MatchWindowSeconds { get; set; } = 10.0;
         }
     }
 }
