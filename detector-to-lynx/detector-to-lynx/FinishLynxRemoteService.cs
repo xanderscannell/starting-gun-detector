@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace detector_to_lynx
 {
@@ -16,17 +17,18 @@ namespace detector_to_lynx
         private readonly string _host;
         private readonly int _port;
         private readonly ITcpTransport _transport;
+        private readonly ILogger<FinishLynxRemoteService> _logger;
 
-        public FinishLynxRemoteService(int port = 7100, string host = "127.0.0.1", ITcpTransport? transport = null)
+        public FinishLynxRemoteService(int port = 7100, string host = "127.0.0.1", ITcpTransport? transport = null, ILoggerFactory? loggerFactory = null)
         {
             _host = host;
             _port = port;
             _transport = transport ?? new TcpTransport();
+            _logger = (loggerFactory ?? Program.LoggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateLogger<FinishLynxRemoteService>();
         }
 
         public static FinishLynxReply ParseReply(string response)
         {
-            Debug.Print("FinishLynx response: " + response);
             if (string.IsNullOrWhiteSpace(response))
                 return FinishLynxReply.InvalidResponse;
 
@@ -61,16 +63,18 @@ namespace detector_to_lynx
             }
             packet.Append("\r\n");
 
+            _logger.LogInformation("Sending to FinishLynx ({Host}:{Port}): {Packet}", _host, _port, packet.ToString().TrimEnd());
             try
             {
-                Debug.Print("Sending: " + packet.ToString());
                 var response = await _transport
                     .SendAndReceiveAsync(_host, _port, packet.ToString(), 5000)
                     .ConfigureAwait(false);
+                _logger.LogDebug("FinishLynx response: {Response}", response.TrimEnd());
                 return (ParseReply(response), response);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Communication error with FinishLynx ({Host}:{Port})", _host, _port);
                 throw new InvalidOperationException("Communication error: " + ex.Message, ex);
             }
         }

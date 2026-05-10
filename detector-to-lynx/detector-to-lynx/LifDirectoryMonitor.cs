@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace detector_to_lynx
 {
     /// <summary>A single FinishLynx start time entry read from a .lif file.</summary>
@@ -23,6 +25,12 @@ namespace detector_to_lynx
         private const int DebounceMs = 300;
 
         private readonly object _lock = new();
+        private readonly ILogger<LifDirectoryMonitor> _logger;
+
+        public LifDirectoryMonitor(ILoggerFactory? loggerFactory = null)
+        {
+            _logger = (loggerFactory ?? Program.LoggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateLogger<LifDirectoryMonitor>();
+        }
 
         /// <summary>
         /// Raised on a thread-pool thread whenever the set of start times changes.
@@ -129,14 +137,22 @@ namespace detector_to_lynx
             {
                 foreach (var file in Directory.EnumerateFiles(directory, "*.lif"))
                 {
-                    var startTime = LifFileParser.ParseStartTime(file);
-                    if (startTime.HasValue)
-                        entries.Add(new LynxStartEntry(Path.GetFileName(file), startTime.Value));
+                    try
+                    {
+                        var startTime = LifFileParser.ParseStartTime(file);
+                        if (startTime.HasValue)
+                            entries.Add(new LynxStartEntry(Path.GetFileName(file), startTime.Value));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to parse .lif file {File}", Path.GetFileName(file));
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // If the directory becomes unavailable, return whatever we have.
+                _logger.LogWarning(ex, "Failed to enumerate .lif files in {Directory}", directory);
             }
 
             entries.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
@@ -150,7 +166,12 @@ namespace detector_to_lynx
             }
 
             if (changed)
+            {
+                _logger.LogInformation(
+                    "Lynx .lif files changed: {Count} start time(s) found in {Directory}",
+                    entries.Count, directory);
                 StartTimesChanged?.Invoke((IReadOnlyList<LynxStartEntry>)entries);
+            }
         }
 
         private static bool EntriesEqual(List<LynxStartEntry> a, List<LynxStartEntry> b)

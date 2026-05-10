@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace detector_to_lynx
 {
@@ -14,10 +15,12 @@ namespace detector_to_lynx
             $"https://firestore.googleapis.com/v1/projects/{ProjectId}/databases/(default)/documents";
 
         private readonly HttpClient _http;
+        private readonly ILogger<FirestoreService> _logger;
 
-        public FirestoreService(HttpClient? httpClient = null)
+        public FirestoreService(HttpClient? httpClient = null, ILoggerFactory? loggerFactory = null)
         {
             _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            _logger = (loggerFactory ?? Program.LoggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateLogger<FirestoreService>();
         }
 
         /// <summary>
@@ -29,7 +32,9 @@ namespace detector_to_lynx
         )
         {
             var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}?key={ApiKey}";
+            _logger.LogDebug("Validating session {SessionCode}", sessionCode);
             using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Session validation for {SessionCode}: {StatusCode}", sessionCode, response.StatusCode);
             return response.IsSuccessStatusCode;
         }
 
@@ -43,6 +48,10 @@ namespace detector_to_lynx
         {
             var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}/detections?key={ApiKey}";
             using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetDetections HTTP {StatusCode} for session {SessionCode}", response.StatusCode, sessionCode);
+            }
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);

@@ -1,15 +1,18 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 
 namespace detector_to_lynx
 {
     public partial class MainForm : Form
     {
+        private readonly ILogger<MainForm> _logger = Program.LoggerFactory.CreateLogger<MainForm>();
         private readonly FirestoreService _firestoreService = new();
         private System.Windows.Forms.Timer? _pollTimer;
         private string? _sessionCode;
         private List<DetectionEntry> _lastDetections = [];
+        private int _consecutivePollFailures = 0;
 
         private readonly LifDirectoryMonitor _lifMonitor = new();
         private MatchResult? _lastMatchResult;
@@ -47,8 +50,10 @@ namespace detector_to_lynx
             Version? version = Assembly.GetExecutingAssembly().GetName().Version;
             if (version != null)
             {
-                Text += " v" + version.Major + "." + version.Minor +
-                        (version.Build > 0 ? "." + version.Build : "");
+                var versionString = version.Major + "." + version.Minor +
+                                    (version.Build > 0 ? "." + version.Build : "");
+                Text += " v" + versionString;
+                _logger.LogInformation("detector-to-lynx v{Version} started", versionString);
             }
         }
 
@@ -104,6 +109,7 @@ namespace detector_to_lynx
             sessionStatusLabel.Text = $"Connected: {code}";
             sessionStatusLabel.ForeColor = Color.Green;
             UpdateStatus($"Joined session {code}.");
+            _logger.LogInformation("Joined session {SessionCode}", code);
             StartPolling();
         }
 
@@ -123,6 +129,7 @@ namespace detector_to_lynx
             sendToLynxButton.Enabled = false;
             UpdateCalibrationSummaryLabel();
             UpdateStatus("Left session.");
+            _logger.LogInformation("Left session");
         }
 
         // ─── Polling ─────────────────────────────────────────────────────────
@@ -154,15 +161,22 @@ namespace detector_to_lynx
             }
             catch (Exception ex)
             {
-                Debug.Print("Poll failed: " + ex.Message);
+                _consecutivePollFailures++;
+                _logger.LogError(ex, "Poll failed for session {SessionCode} (consecutive failures: {Count})", _sessionCode, _consecutivePollFailures);
                 return;
             }
+
+            _consecutivePollFailures = 0;
 
             if (detections.Count == _lastDetections.Count &&
                 detections.Select(d => d.ClientTimestamp).SequenceEqual(
                     _lastDetections.Select(d => d.ClientTimestamp)))
                 return;
 
+            _logger.LogInformation(
+                "Detections updated for session {SessionCode}: {Count} total, newest {Newest}",
+                _sessionCode, detections.Count,
+                detections.Count > 0 ? detections[0].Timestamp : "none");
             _lastDetections = detections;
             RebuildCalibrationGrid();
         }
@@ -360,6 +374,7 @@ namespace detector_to_lynx
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Failed to connect to FinishLynx for StartCreate");
                 sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
                 UpdateStatus("Failed to connect to FinishLynx.", error: true);
                 MessageBox.Show(
@@ -373,6 +388,9 @@ namespace detector_to_lynx
             if (status == FinishLynxReply.Ok)
             {
                 sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
+                _logger.LogInformation(
+                    "Start created in FinishLynx: {AdjustedTime} (original: {OriginalTime}, calibrated: {HasCalibration})",
+                    adjustedTimeString, timeString, hasCalibration);
                 UpdateStatus(hasCalibration
                     ? $"Start created in FinishLynx: {adjustedTimeString} (calibrated from {timeString})"
                     : $"Start created in FinishLynx: {adjustedTimeString}");
@@ -395,7 +413,7 @@ namespace detector_to_lynx
                 return;
             }
 
-            Debug.Print($"TOD start rejected; trying offset fallback: {offsetSeconds:F3}s");
+            _logger.LogInformation("TOD start rejected by FinishLynx; trying offset fallback: {Offset:F3}s", offsetSeconds);
 
             try
             {
@@ -403,6 +421,7 @@ namespace detector_to_lynx
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Failed to connect to FinishLynx for offset fallback StartCreate");
                 sendToLynxButton.Enabled = GetSelectedDetectionEntry() != null;
                 UpdateStatus("Failed to connect to FinishLynx.", error: true);
                 MessageBox.Show($"Failed to connect to FinishLynx:\n{ex.Message}",
