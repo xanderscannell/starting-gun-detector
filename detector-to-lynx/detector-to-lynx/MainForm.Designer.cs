@@ -33,6 +33,11 @@
             matchWindowLabel = new Label();
             matchWindowTextBox = new TextBox();
             matchWindowUnitsLabel = new Label();
+            manualTimeLabel = new Label();
+            manualTimeTextBox = new TextBox();
+            addManualTimeButton = new Button();
+            manualTimesListBox = new ListBox();
+            removeManualTimeButton = new Button();
 
             // ── Calibration group ────────────────────────────────────────────
             calibrationGroupBox = new GroupBox();
@@ -97,7 +102,7 @@
             lynxResultsGroupBox.SuspendLayout();
             lynxResultsGroupBox.Text = "Lynx Results Directory";
             lynxResultsGroupBox.Location = new Point(12, 90);
-            lynxResultsGroupBox.Size = new Size(660, 80);
+            lynxResultsGroupBox.Size = new Size(660, 168);
             lynxResultsGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             lynxResultsDirLabel.Text = "Directory:";
@@ -148,6 +153,40 @@
             lynxResultsGroupBox.Controls.Add(matchWindowLabel);
             lynxResultsGroupBox.Controls.Add(matchWindowTextBox);
             lynxResultsGroupBox.Controls.Add(matchWindowUnitsLabel);
+
+            manualTimeLabel.Text = "Manual start:";
+            manualTimeLabel.Location = new Point(10, 78);
+            manualTimeLabel.Size = new Size(90, 23);
+            manualTimeLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+            manualTimeTextBox.Location = new Point(103, 76);
+            manualTimeTextBox.Size = new Size(115, 23);
+            manualTimeTextBox.Font = new Font("Consolas", 9f);
+            manualTimeTextBox.PlaceholderText = "HH:mm:ss.fff";
+            manualTimeTextBox.KeyDown += manualTimeTextBox_KeyDown;
+
+            addManualTimeButton.Text = "Add";
+            addManualTimeButton.Location = new Point(224, 74);
+            addManualTimeButton.Size = new Size(55, 27);
+            addManualTimeButton.Click += addManualTimeButton_Click;
+
+            manualTimesListBox.Location = new Point(103, 107);
+            manualTimesListBox.Size = new Size(176, 53);
+            manualTimesListBox.Font = new Font("Consolas", 9f);
+            manualTimesListBox.SelectionMode = SelectionMode.One;
+            manualTimesListBox.SelectedIndexChanged += manualTimesListBox_SelectedIndexChanged;
+
+            removeManualTimeButton.Text = "Remove";
+            removeManualTimeButton.Location = new Point(285, 107);
+            removeManualTimeButton.Size = new Size(65, 27);
+            removeManualTimeButton.Enabled = false;
+            removeManualTimeButton.Click += removeManualTimeButton_Click;
+
+            lynxResultsGroupBox.Controls.Add(manualTimeLabel);
+            lynxResultsGroupBox.Controls.Add(manualTimeTextBox);
+            lynxResultsGroupBox.Controls.Add(addManualTimeButton);
+            lynxResultsGroupBox.Controls.Add(manualTimesListBox);
+            lynxResultsGroupBox.Controls.Add(removeManualTimeButton);
             lynxResultsGroupBox.ResumeLayout(false);
 
             // ════════════════════════════════════════════════════════════════
@@ -155,7 +194,7 @@
             // ════════════════════════════════════════════════════════════════
             calibrationGroupBox.SuspendLayout();
             calibrationGroupBox.Text = "Calibration";
-            calibrationGroupBox.Location = new Point(12, 178);
+            calibrationGroupBox.Location = new Point(12, 266);
             calibrationGroupBox.Size = new Size(660, 330);
             calibrationGroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
 
@@ -233,7 +272,7 @@
             // ════════════════════════════════════════════════════════════════
             settingsGroupBox.SuspendLayout();
             settingsGroupBox.Text = "Settings";
-            settingsGroupBox.Location = new Point(12, 516);
+            settingsGroupBox.Location = new Point(12, 604);
             settingsGroupBox.Size = new Size(660, 55);
             settingsGroupBox.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
@@ -261,8 +300,8 @@
             // ════════════════════════════════════════════════════════════════
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(684, 610);
-            MinimumSize = new Size(600, 580);
+            ClientSize = new Size(684, 698);
+            MinimumSize = new Size(600, 668);
             Text = "Detector to Lynx";
             Icon = new System.Drawing.Icon(Path.Combine(AppContext.BaseDirectory, "win_icon.ico"));
             Controls.Add(sessionGroupBox);
@@ -288,6 +327,11 @@
         private Label matchWindowLabel;
         private TextBox matchWindowTextBox;
         private Label matchWindowUnitsLabel;
+        private Label manualTimeLabel;
+        private TextBox manualTimeTextBox;
+        private Button addManualTimeButton;
+        private ListBox manualTimesListBox;
+        private Button removeManualTimeButton;
 
         private GroupBox calibrationGroupBox;
         private DataGridView calibrationGridView;

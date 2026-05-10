@@ -16,6 +16,7 @@ namespace detector_to_lynx
 
         private readonly LifDirectoryMonitor _lifMonitor = new();
         private MatchResult? _lastMatchResult;
+        private List<ManualStartEntry> _manualStartEntries = [];
 
         // Maps DataGridView row index → DetectionEntry (null = Lynx-only row).
         private readonly Dictionary<int, DetectionEntry?> _rowToDetection = [];
@@ -251,12 +252,58 @@ namespace detector_to_lynx
             }
         }
 
+        // ─── Manual start times ──────────────────────────────────────────────
+
+        private void addManualTimeButton_Click(object sender, EventArgs e) => AddManualTime();
+
+        private void manualTimeTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Return)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                AddManualTime();
+            }
+        }
+
+        private void AddManualTime()
+        {
+            var text = manualTimeTextBox.Text.Trim();
+            if (!TryParseTimeOfDay(text, out var ts))
+            {
+                manualTimeTextBox.BackColor = Color.MistyRose;
+                return;
+            }
+            manualTimeTextBox.BackColor = SystemColors.Window;
+            manualTimeTextBox.Clear();
+            _manualStartEntries.Add(new ManualStartEntry(ts));
+            manualTimesListBox.Items.Add(FormatTimeSpan(ts));
+            RebuildCalibrationGrid();
+        }
+
+        private void removeManualTimeButton_Click(object sender, EventArgs e)
+        {
+            var idx = manualTimesListBox.SelectedIndex;
+            if (idx < 0) return;
+            _manualStartEntries.RemoveAt(idx);
+            manualTimesListBox.Items.RemoveAt(idx);
+            removeManualTimeButton.Enabled = manualTimesListBox.SelectedIndex >= 0;
+            RebuildCalibrationGrid();
+        }
+
+        private void manualTimesListBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            removeManualTimeButton.Enabled = manualTimesListBox.SelectedIndex >= 0;
+        }
+
         // ─── Calibration grid ────────────────────────────────────────────────
 
         private void RebuildCalibrationGrid()
         {
+            var manualTimeSet = _manualStartEntries.Select(e => e.StartTime).ToHashSet();
             var lynxTimes = _lifMonitor.CurrentStartTimes
                 .Select(e => e.StartTime)
+                .Concat(_manualStartEntries.Select(e => e.StartTime))
                 .Distinct()
                 .ToList();
 
@@ -299,9 +346,11 @@ namespace detector_to_lynx
                 int rowIdx = calibrationGridView.Rows.Add(detectionCell, lynxCell, diffCell, deviceCell);
                 _rowToDetection[rowIdx] = entry;
 
-                // Tint Lynx-only rows.
-                if (!row.Detection.HasValue)
-                    calibrationGridView.Rows[rowIdx].DefaultCellStyle.BackColor = Color.FromArgb(245, 245, 255);
+                // Tint rows based on Lynx time source.
+                if (row.LynxStart.HasValue && manualTimeSet.Contains(row.LynxStart.Value))
+                    calibrationGridView.Rows[rowIdx].DefaultCellStyle.BackColor = Color.FromArgb(255, 248, 220);  // amber = manual
+                else if (!row.Detection.HasValue)
+                    calibrationGridView.Rows[rowIdx].DefaultCellStyle.BackColor = Color.FromArgb(245, 245, 255);  // blue = .lif only
             }
 
             calibrationGridView.ResumeLayout();

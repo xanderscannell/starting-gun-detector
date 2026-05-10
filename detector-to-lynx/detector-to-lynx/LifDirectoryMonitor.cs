@@ -5,6 +5,9 @@ namespace detector_to_lynx
     /// <summary>A single FinishLynx start time entry read from a .lif file.</summary>
     public record LynxStartEntry(string FileName, TimeSpan StartTime);
 
+    /// <summary>A manually-entered known gun-fire time used as a calibration reference.</summary>
+    public record ManualStartEntry(TimeSpan StartTime);
+
     /// <summary>
     /// Monitors a directory for new / updated .lif files and raises
     /// <see cref="StartTimesChanged"/> whenever the set of parsed start times changes.
