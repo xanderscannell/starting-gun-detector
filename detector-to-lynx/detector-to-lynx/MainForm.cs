@@ -8,7 +8,7 @@ namespace detector_to_lynx
     public partial class MainForm : Form
     {
         private readonly ILogger<MainForm> _logger = Program.LoggerFactory.CreateLogger<MainForm>();
-        private readonly FirestoreService _firestoreService = new();
+        private readonly FirestoreService _firestoreService = new(Program.ApiKey);
         private System.Windows.Forms.Timer? _pollTimer;
         private string? _sessionCode;
         private List<DetectionEntry> _lastDetections = [];

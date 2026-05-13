@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 DEFAULT_PROJECT_ID = os.environ.get("STARTING_GUN_FIRESTORE_PROJECT_ID", "starting-gun-detector")
-DEFAULT_API_KEY = os.environ.get("STARTING_GUN_FIRESTORE_API_KEY", "AIzaSyDeitBok4LXW8KsksfPxfQHm8K4ObWBEQo")
+API_KEY_ENV_VAR = "STARTING_GUN_FIRESTORE_API_KEY"
 
 
 @dataclass
@@ -40,8 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--api-key",
-        default=DEFAULT_API_KEY,
-        help="Firestore REST API key. Defaults to the value used by this repository.",
+        default=None,
+        help=f"Firestore REST API key. Defaults to the {API_KEY_ENV_VAR} environment variable.",
     )
     return parser
 
@@ -180,9 +180,17 @@ def main() -> int:
     session_code = args.session_code.upper()
     output_path = Path(args.output_file)
 
+    api_key = args.api_key or os.environ.get(API_KEY_ENV_VAR)
+    if not api_key:
+        print(
+            f"Firestore API key not provided. Pass --api-key or set the {API_KEY_ENV_VAR} environment variable.",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
-        validate_session(session_code, args.project_id, args.api_key)
-        entries = fetch_detections(session_code, args.project_id, args.api_key)
+        validate_session(session_code, args.project_id, api_key)
+        entries = fetch_detections(session_code, args.project_id, api_key)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         write_csv(output_path, session_code, entries)
     except RuntimeError as exc:

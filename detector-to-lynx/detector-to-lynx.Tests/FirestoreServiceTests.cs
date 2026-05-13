@@ -109,7 +109,7 @@ namespace detector_to_lynx.Tests
         [Fact]
         public async Task ValidateSessionAsync_Returns_True_On_200()
         {
-            var svc = new FirestoreService(MakeClient("""{ "name": "projects/x/databases/(default)/documents/sessions/ABCD" }"""));
+            var svc = new FirestoreService("test-api-key", MakeClient("""{ "name": "projects/x/databases/(default)/documents/sessions/ABCD" }"""));
             var result = await svc.ValidateSessionAsync("ABCD");
             Assert.True(result);
         }
@@ -117,7 +117,7 @@ namespace detector_to_lynx.Tests
         [Fact]
         public async Task ValidateSessionAsync_Returns_False_On_404()
         {
-            var svc = new FirestoreService(MakeClient("""{ "error": { "code": 404 } }""", HttpStatusCode.NotFound));
+            var svc = new FirestoreService("test-api-key", MakeClient("""{ "error": { "code": 404 } }""", HttpStatusCode.NotFound));
             var result = await svc.ValidateSessionAsync("ZZZZ");
             Assert.False(result);
         }
@@ -134,7 +134,7 @@ namespace detector_to_lynx.Tests
               ]
             }
             """;
-            var svc = new FirestoreService(MakeClient(json));
+            var svc = new FirestoreService("test-api-key", MakeClient(json));
             var results = await svc.GetDetectionsAsync("ABCD");
 
             Assert.Single(results);
@@ -145,7 +145,7 @@ namespace detector_to_lynx.Tests
         [Fact]
         public async Task GetDetectionsAsync_ThrowsOnHttpError()
         {
-            var svc = new FirestoreService(MakeClient("Forbidden", HttpStatusCode.Forbidden));
+            var svc = new FirestoreService("test-api-key", MakeClient("Forbidden", HttpStatusCode.Forbidden));
             await Assert.ThrowsAsync<HttpRequestException>(() => svc.GetDetectionsAsync("ABCD"));
         }
     }

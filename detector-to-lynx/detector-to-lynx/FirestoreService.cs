@@ -9,16 +9,19 @@ namespace detector_to_lynx
     public class FirestoreService
     {
         public const string ProjectId = "starting-gun-detector";
-        public const string ApiKey = "AIzaSyDeitBok4LXW8KsksfPxfQHm8K4ObWBEQo";
 
         private static readonly string BaseUrl =
             $"https://firestore.googleapis.com/v1/projects/{ProjectId}/databases/(default)/documents";
 
         private readonly HttpClient _http;
         private readonly ILogger<FirestoreService> _logger;
+        private readonly string _apiKey;
 
-        public FirestoreService(HttpClient? httpClient = null, ILoggerFactory? loggerFactory = null)
+        public FirestoreService(string apiKey, HttpClient? httpClient = null, ILoggerFactory? loggerFactory = null)
         {
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new ArgumentException("API key is required", nameof(apiKey));
+            _apiKey = apiKey;
             _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             _logger = (loggerFactory ?? Program.LoggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateLogger<FirestoreService>();
         }
@@ -31,7 +34,7 @@ namespace detector_to_lynx
             CancellationToken cancellationToken = default
         )
         {
-            var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}?key={ApiKey}";
+            var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}?key={_apiKey}";
             _logger.LogDebug("Validating session {SessionCode}", sessionCode);
             using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Session validation for {SessionCode}: {StatusCode}", sessionCode, response.StatusCode);
@@ -46,7 +49,7 @@ namespace detector_to_lynx
             CancellationToken cancellationToken = default
         )
         {
-            var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}/detections?key={ApiKey}";
+            var url = $"{BaseUrl}/sessions/{Uri.EscapeDataString(sessionCode.ToUpperInvariant())}/detections?key={_apiKey}";
             using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
