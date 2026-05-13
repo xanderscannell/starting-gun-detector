@@ -19,6 +19,10 @@
   - Replaced every `FontFamily.Monospace` with `AppMonoFont` across 5 UI files (CalibrationDialog, CaptureScreen, RaceBrowserScreen, SessionDialog, StartingGunScreen)
   - Added explicit mono+bold to two display sites that had no fontFamily override: the navigation drawer "Session: XXXX" footer and the join-session input placeholder
   - **Tightened session-code alphabet** in `SessionRepository.codeChars` to `ACDEFGHJKMNPQRTUVWXY34679` (25 chars, 390K combos). Excludes `O, 0, I, 1, L, B, 8, S, 5, Z, 2` — fixes both visual and aural ambiguity (see ADR-010)
+- **Issue #4: Listening service no longer survives swipe-away**
+  - Added `onTaskRemoved()` override to `audio/ListeningService.kt` that calls `stopSelf()`
+  - Behavior: home button / screen off / app switch still keep listening; swiping the app away from recents now stops cleanly (notification dismissed, mic released). Force-stop from Settings unchanged.
+  - **Known follow-up:** the session-member's Firestore `isListening` flag stays `true` (stale) after swipe-away, because the ViewModel's `viewModelScope` is cancelled inside `onCleared` and can't reliably emit the false-write before process death. Tracked as issue #5 (heartbeat-based presence).
 
 ## Recently Completed (2026-05-13 session, earlier)
 
@@ -77,6 +81,7 @@
 ## Next Up (future sessions)
 
 - Distribute new APK to other users, then deploy `firestore.rules` via `firebase deploy --only firestore:rules`
+- **Heartbeat-based presence** (issue #5 — proper fix for the stale `isListening` flag noted in issue #4). Each listening member writes `lastSeen = serverTimestamp` every N seconds; readers (lynx desktop, other phones) treat anything older than ~3× the heartbeat interval as offline. Requires: heartbeat coroutine in `ListeningService` or `GunShotViewModel`, rules update to allow heartbeat writes on own member doc, lynx-side read change to use `lastSeen` rather than `isListening`. Estimate ~50-100 lines + rules + desktop change.
 - Session expiry / cleanup (stale sessions accumulate)
 - Data export (CSV/PDF race results)
 - Lane/athlete/wind metadata (future enhancement)

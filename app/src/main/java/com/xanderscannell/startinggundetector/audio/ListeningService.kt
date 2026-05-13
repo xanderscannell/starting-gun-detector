@@ -52,6 +52,13 @@ class ListeningService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // User swiped the app away from recents — stop listening rather than
+        // continuing as a background ghost. onDestroy handles the cleanup.
+        super.onTaskRemoved(rootIntent)
+        stopSelf()
+    }
+
     override fun onDestroy() {
         isRunning = false
         detectorJob?.cancel()
