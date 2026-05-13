@@ -33,7 +33,7 @@ data class UiState(
     val deviceShortId: String = "",
     val lastDetectedTimestamp: String = "",
     val detectionHistory: List<DetectionEntry> = emptyList(),
-    val sensitivity: Float = 7f,
+    val sensitivity: Float = UserPreferences.DEFAULT_SENSITIVITY,
     val latencyOffsetMs: Int = 0,
     val username: String = "",
     val errorMessage: String? = null,
@@ -62,6 +62,7 @@ class GunShotViewModel(
     private val _uiState = MutableStateFlow(
         UiState(
             deviceShortId = "",
+            sensitivity = userPreferences.sensitivity,
             latencyOffsetMs = userPreferences.latencyOffsetMs,
             username = userPreferences.username
         )
@@ -368,6 +369,7 @@ class GunShotViewModel(
 
     fun setSensitivity(value: Float) {
         if (_uiState.value.detectorState == DetectorState.LISTENING) return
+        userPreferences.sensitivity = value
         _uiState.value = _uiState.value.copy(sensitivity = value)
     }
 

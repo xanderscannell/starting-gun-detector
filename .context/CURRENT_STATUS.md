@@ -19,6 +19,10 @@
   - Replaced every `FontFamily.Monospace` with `AppMonoFont` across 5 UI files (CalibrationDialog, CaptureScreen, RaceBrowserScreen, SessionDialog, StartingGunScreen)
   - Added explicit mono+bold to two display sites that had no fontFamily override: the navigation drawer "Session: XXXX" footer and the join-session input placeholder
   - **Tightened session-code alphabet** in `SessionRepository.codeChars` to `ACDEFGHJKMNPQRTUVWXY34679` (25 chars, 390K combos). Excludes `O, 0, I, 1, L, B, 8, S, 5, Z, 2` — fixes both visual and aural ambiguity (see ADR-010)
+- **Issue #3: Persistent sensitivity setting**
+  - Added `sensitivity: Float` property to `device/UserPreferences.kt` plus a public `DEFAULT_SENSITIVITY = 7f` constant
+  - `GunShotViewModel` now reads `userPreferences.sensitivity` into the initial `UiState` and writes through on every `setSensitivity()` call — same pattern as `latencyOffsetMs` and `username`
+  - The "no sensitivity changes while listening" guard is preserved (no prefs write when locked)
 - **Issue #4: Listening service no longer survives swipe-away**
   - Added `onTaskRemoved()` override to `audio/ListeningService.kt` that calls `stopSelf()`
   - Behavior: home button / screen off / app switch still keep listening; swiping the app away from recents now stops cleanly (notification dismissed, mic released). Force-stop from Settings unchanged.
