@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="detector-to-lynx/detector-to-lynx.csproj" />
+  <Project Path="detector-to-lynx.Tests/detector-to-lynx.Tests.csproj" />
+</Solution>

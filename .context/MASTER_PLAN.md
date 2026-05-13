@@ -275,6 +275,37 @@ A simple Android app that listens via microphone for a gunshot (sharp audio tran
 
 ---
 
+## Supplemental Utilities
+
+- [x] Add a standalone script to export all session start times from Firestore to a CSV file
+
+---
+
+## Phase 8: detector-to-lynx (Windows Companion App)
+
+**Goal**: Windows Forms app that mirrors Firestore detections in real-time, auto-calibrates against FinishLynx `.lif` result files, and sends corrected start times to FinishLynx Remote Control.
+
+### 8.1 Core infrastructure
+- [x] `FirestoreService.cs` — poll Firestore `sessions/{code}/detections`
+- [x] `FinishLynxRemoteService.cs` — TCP socket to FinishLynx Remote Control
+- [x] `SavedSettingsManager.cs` — JSON settings persistence
+- [x] `MainForm.cs` + `MainForm.Designer.cs` — Windows Forms UI
+
+### 8.2 Automated LIF calibration (2026-05-02)
+- [x] `LifFileParser.cs` — parse start time from field 10 of `.lif` header row
+- [x] `CalibrationMatcher.cs` — greedy nearest-neighbour match of detections to Lynx starts; computes offset + residuals
+- [x] `LifDirectoryMonitor.cs` — `FileSystemWatcher` with debounce; raises event on UI thread
+- [x] `SavedSettingsManager` — added `LynxResultsDirectory` and configurable `MatchWindowSeconds`
+- [x] `MainForm` — replaced manual calibration (text box + Calibrate button) with `DataGridView` showing auto-matched pairs; Browse directory button; match window setting
+- [x] Tests: `LifFileParserTests.cs` (10 cases), `CalibrationMatcherTests.cs` (20 cases)
+
+### Phase 8 Future
+- [ ] Firestore security rules (restrict writes to session members)
+- [ ] Session expiry / cleanup
+- [ ] Data export (CSV/PDF race results)
+
+---
+
 ## Phase Dependencies
 
 ```
