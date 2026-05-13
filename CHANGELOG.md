@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.6.0 — 2026-05-13
+
+> **Required update.** Firestore security rules ship with this release. Any v1.5.0 or earlier installation will be unable to create, join, or send detections to sessions once the rules are deployed. Update before continuing to use the app.
+
+### Added
+- **Anonymous Firebase Auth** as the device identity — eager background sign-in on launch, all Firestore writes authenticated. Replaces the previous SharedPreferences UUID, which was unverifiable on the server.
+- **Firestore Security Rules** lock writes to authenticated session members and to the writer's own `auth.uid`. Reads remain open so the Lynx desktop app and export script keep working without changes.
+- **Session code in the top bar** — the active session code is shown next to the hamburger icon in bold mono red, so it can be seen and read aloud without opening the drawer (#1)
+- **JetBrains Mono font** bundled (Light/Regular/Medium/Bold). Replaces the system monospace everywhere — slashed zero, clear `I`/`l`/`1` distinctions in all timing displays, session codes, and dialogs (#2)
+
+### Changed
+- **Session-code alphabet tightened** to 25 characters (`ACDEFGHJKMNPQRTUVWXY34679`), excluding `O`/`0`, `I`/`1`, `L`, `B`/`8`, `S`/`5`, `Z`/`2`. Codes are now unambiguous when read aloud at a track or typed at a glance. Existing in-flight sessions still join normally — only newly created codes use the restricted alphabet. (#2, ADR-010)
+- **Sensitivity setting now persists** across app launches — the slider value is restored when you reopen the app (#3)
+
+### Fixed
+- **App stops listening when swiped away** from the recents list. Previously the foreground service kept running until force-stopped from Settings. Locking the phone, pressing home, or switching apps still preserves listening as designed. (#4)
+
+### Technical
+- Added `firebase-auth-ktx` dependency; new `firestore.rules` and `firebase.json`. Deploy rules with `firebase deploy --only firestore:rules` once all users have updated.
+- New `device/AuthManager.kt`, `StartingGunApplication.kt`; `DeviceIdProvider.kt` slimmed (SharedPrefs UUID no longer used).
+- New `ui/theme/Type.kt` exposing `AppMonoFont: FontFamily`; `app/src/main/res/font/` with bundled JetBrains Mono weights (~1 MB total).
+- `UserPreferences.DEFAULT_SENSITIVITY` constant introduced so the default value lives in one place.
+- `versionName` and `versionCode` brought into sync with the changelog (had been stuck at `1.0` / `1`).
+
+### Known follow-up
+- **Heartbeat-based presence** (#5) — the session member's `isListening` flag can stay stale (`true`) after swipe-away, force-stop, or OS-kill. To be replaced with a proper `lastSeen` heartbeat pattern in a future release.
+
+---
+
 ## v1.5.0 — 2026-04-21
 
 ### Added
