@@ -240,6 +240,44 @@ Calibration runs automatically after recording completes, not at session start. 
 
 ---
 
+## ADR-009: Anonymous Firebase Auth as Device Identity
+
+**Date**: 2026-05-13
+**Status**: Accepted
+
+**Context**:
+The app originally identified devices via a UUID stored in `SharedPreferences` (`DeviceIdProvider.getDeviceId(context)`) and used that UUID as the `deviceId` field on Firestore writes. With no Firebase Auth in place, `request.auth` was always null, so security rules could not distinguish one device from another — any client could claim any deviceId. This blocked writing meaningful Firestore Security Rules: until rules existed, the project ran with default permissive rules, and anyone with the Firebase Web API key (which is necessarily public, embedded in client apps) could write arbitrary garbage to any collection.
+
+**Decision**:
+Replace the SharedPreferences UUID with Firebase Anonymous Auth's `uid` as the canonical device identity. Sign in anonymously eagerly on app launch (background coroutine, non-blocking). All Firestore-touching code in `SessionRepository` calls `AuthManager.requireUid()` before issuing the request, awaiting sign-in completion if it hasn't arrived yet. Rules can then verify `request.resource.data.deviceId == request.auth.uid` and `exists(/sessions/{code}/members/{auth.uid})`.
+
+**Rationale**:
+- `request.auth.uid` is the only identity Firestore Security Rules can verify cryptographically — anything client-controlled can be impersonated
+- Anonymous Auth requires no user interaction (no email/password), so the UX is unchanged
+- Eager background sign-in means by the time the user creates/joins a session (multiple UI taps), sign-in is well complete — zero user-visible latency
+- The local detection timestamp is captured before any Firestore call regardless, so even a worst-case sign-in delay cannot affect detection latency
+- Reads remain unauthenticated so the lynx desktop app and the Python export script keep working without modification (rules allow read on `sessions/*` for any 4-char code)
+
+**Consequences**:
+- (+) Security rules can now meaningfully restrict writes (member-only, own-uid-only, schema-locked)
+- (+) Calibration documents are now per-device-private at the rule level
+- (+) No dependency on the Firebase Web API key staying secret — the key is intentionally public per Google's design
+- (-) Existing in-flight sessions in Firestore still contain old SharedPrefs UUIDs in their `deviceId` fields; these are ephemeral and not migrated
+- (-) Old app versions stop working the moment new rules are deployed (they have no auth) — must ship the app update first, wait for adoption, then deploy rules
+- (-) Adds `firebase-auth-ktx` dependency (~few hundred KB)
+
+**Alternatives considered**:
+- Structural rules without auth (Path B in the design discussion): required-fields, schema locks, no overwrites — but cannot stop someone with the session code from spamming detections under any deviceId. Rejected as a half-measure.
+- Firebase App Check (Play Integrity API): verifies requests come from the real Android app, but doesn't distinguish users. Rejected as orthogonal — useful as a future addition, not a substitute.
+- Keep SharedPrefs UUID as a stable display ID alongside auth.uid: rejected as unnecessary complexity since both lifetimes are tied to install.
+
+**Deployment ordering**:
+1. Build + ship the app update (Phase 8 code change)
+2. Wait for user adoption to be high enough that breaking old versions is acceptable
+3. Deploy `firestore.rules` via `firebase deploy --only firestore:rules`
+
+---
+
 <!-- Copy the template above for each new decision.
      Number sequentially: ADR-005, ADR-006, etc.
      When a decision is reversed, set Status to "Superseded by ADR-XXX" -->

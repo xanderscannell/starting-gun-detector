@@ -1,13 +1,26 @@
 # Project Status
 
-**Last updated**: 2026-04-21
+**Last updated**: 2026-05-13
 
 ## Current Position
 
-**Phase**: Phase 7 complete — Race file persistence system shipped
-**Progress**: 100% — all planned features implemented
+**Phase**: Phase 8 in progress — Firestore security hardening
+**Progress**: Code written, awaiting build verification + rules deployment
 
-## Recently Completed (2026-04-21 session)
+## Recently Completed (2026-05-13 session)
+
+- **Phase 8: Firebase Auth + Firestore security rules**
+  - Added `firebase-auth-ktx` dependency
+  - Created `device/AuthManager.kt` — singleton wrapping anonymous Firebase Auth, mutex-deduped sign-in
+  - Created `StartingGunApplication.kt` + manifest registration — eager background sign-in on app launch
+  - Gutted `device/DeviceIdProvider.kt` — removed SharedPrefs UUID; `auth.uid` is the new device identity
+  - Refactored `session/SessionRepository.kt` — no constructor param; each method calls `AuthManager.requireUid()`
+  - Updated `viewmodel/GunShotViewModel.kt` + factory — deviceId now nullable, populated post-sign-in
+  - Wrote `firestore.rules` + `firebase.json` — open reads (lynx/script keep working), writes locked to session members + own auth.uid
+  - **Pending:** build verification in Android Studio + `firebase deploy --only firestore:rules`
+  - **Deployment ordering:** ship the app update first, wait for adoption, then deploy rules — old app versions will fail all writes once rules are live
+
+## Previously Completed (2026-04-21 session)
 
 - **Phase 7: Race File Persistence System**
   - Added `kotlinx-serialization-json` dependency
@@ -28,7 +41,8 @@
 
 ## Next Up (future sessions)
 
-- Firestore security rules (restrict writes to session members)
+- Verify Phase 8 build in Android Studio, then deploy `firestore.rules` via Firebase CLI
+- Merge `lynx` branch (still has the leaked Firebase API key in `detector-to-lynx/FirestoreService.cs:12` and `scripts/export_session_start_times.py:17` — needs cleanup commit on the branch before merge; rotation in GCP not strictly needed since Firebase Web API keys are designed to be public)
 - Session expiry / cleanup (stale sessions accumulate)
 - Data export (CSV/PDF race results)
 - Lane/athlete/wind metadata (future enhancement)
@@ -44,7 +58,8 @@ app/src/main/java/com/xanderscannell/startinggundetector/
 │   ├── RaceModels.kt                  [complete] ← NEW
 │   └── RaceRepository.kt             [complete] ← NEW
 ├── device/
-│   ├── DeviceIdProvider.kt            [complete]
+│   ├── AuthManager.kt                  [complete] ← NEW (Phase 8)
+│   ├── DeviceIdProvider.kt            [complete] ← SLIMMED (Phase 8)
 │   └── UserPreferences.kt            [complete]
 ├── session/
 │   └── SessionRepository.kt           [complete]
@@ -65,6 +80,5 @@ app/src/main/java/com/xanderscannell/startinggundetector/
 
 ## Open Questions
 
-- **Firestore security rules**: Currently open-read/write. Should restrict so only devices in a session can write detections. Low priority until wider distribution.
 - **Session expiry**: Sessions accumulate indefinitely. Consider a TTL or manual cleanup function.
 - **Keystore management**: Release keystore was created locally. User should back it up — without it, future updates cannot be signed with the same key.

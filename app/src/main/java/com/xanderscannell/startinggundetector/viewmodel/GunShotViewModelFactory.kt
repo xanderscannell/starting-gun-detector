@@ -8,13 +8,12 @@ import com.xanderscannell.startinggundetector.session.SessionRepository
 
 class GunShotViewModelFactory(
     private val application: Application,
-    private val deviceId: String,
     private val sessionRepository: SessionRepository,
     private val userPreferences: UserPreferences
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return GunShotViewModel(application, deviceId, sessionRepository, userPreferences) as T
+        return GunShotViewModel(application, sessionRepository, userPreferences) as T
     }
 }

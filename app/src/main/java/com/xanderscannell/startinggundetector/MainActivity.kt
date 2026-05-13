@@ -35,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import com.xanderscannell.startinggundetector.device.UserPreferences
 import com.xanderscannell.startinggundetector.session.SessionRepository
 import com.xanderscannell.startinggundetector.data.RaceRepository
@@ -68,12 +67,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun App() {
     val context = LocalContext.current
-    val deviceId = remember { DeviceIdProvider.getDeviceId(context) }
-    val sessionRepository = remember { SessionRepository(deviceId) }
+    val sessionRepository = remember { SessionRepository() }
     val userPreferences = remember { UserPreferences(context) }
     val raceRepository = remember { RaceRepository(File(context.filesDir, "races")) }
     val vm: GunShotViewModel = viewModel(
-        factory = GunShotViewModelFactory(context.applicationContext as android.app.Application, deviceId, sessionRepository, userPreferences)
+        factory = GunShotViewModelFactory(context.applicationContext as android.app.Application, sessionRepository, userPreferences)
     )
     val raceVm: RaceViewModel = viewModel(
         factory = RaceViewModelFactory(raceRepository)

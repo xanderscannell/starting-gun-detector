@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validSessionCode(code) {
+      return code is string && code.matches('^[A-Z0-9]{4}$');
+    }
+
+    function isMember(code) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/sessions/$(code)/members/$(request.auth.uid));
+    }
+
+    function isCreator(code) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/sessions/$(code)).data.createdBy == request.auth.uid;
+    }
+
+    match /sessions/{code} {
+      // Reads are open: lynx + the export script call Firestore via API key only
+      // (no auth). Sessions are ephemeral, the 4-char code is a soft secret shared
+      // across the meet, and reads cannot mutate state.
+      allow read: if validSessionCode(code);
+
+      allow create: if request.auth != null
+        && validSessionCode(code)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasOnly(['createdBy', 'createdAt']);
+
+      allow update, delete: if isCreator(code);
+
+      match /members/{memberUid} {
+        allow read: if validSessionCode(code);
+        // Each device can only write its own member doc.
+        allow write: if request.auth != null && request.auth.uid == memberUid;
+      }
+
+      match /detections/{detectionId} {
+        allow read: if validSessionCode(code);
+
+        // Must be a session member; the deviceId field must match the caller's uid;
+        // only the expected fields are allowed; no edits or deletes after creation.
+        allow create: if isMember(code)
+          && request.resource.data.deviceId == request.auth.uid
+          && request.resource.data.keys().hasOnly([
+               'timestamp', 'deviceId', 'displayName',
+               'clientTimestamp', 'serverCorrectedMillis', 'createdAt'
+             ]);
+        allow update, delete: if false;
+      }
+    }
+
+    // Each device's clock-offset calibration document is private to that device.
+    match /calibrations/{deviceUid} {
+      allow read, write: if request.auth != null && request.auth.uid == deviceUid;
+    }
+
+    // Default deny for anything outside the documented schema.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

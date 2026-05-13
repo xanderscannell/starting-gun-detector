@@ -3,6 +3,7 @@ package com.xanderscannell.startinggundetector.session
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.xanderscannell.startinggundetector.device.AuthManager
 import com.xanderscannell.startinggundetector.device.DeviceIdProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -24,14 +25,21 @@ data class SessionMember(
     val isMine: Boolean = false
 )
 
-class SessionRepository(private val deviceId: String) {
+class SessionRepository {
 
     private val db = FirebaseFirestore.getInstance()
     private val codeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
     private fun generateCode(): String = (1..4).map { codeChars.random() }.joinToString("")
 
+    /**
+     * Returns the current device's stable identity (Firebase Auth anonymous uid).
+     * Suspends until anonymous sign-in completes if not already signed in.
+     */
+    suspend fun currentDeviceId(): String = AuthManager.requireUid()
+
     suspend fun createSession(): String {
+        val deviceId = AuthManager.requireUid()
         var code: String
         var attempts = 0
         do {
@@ -61,6 +69,7 @@ class SessionRepository(private val deviceId: String) {
         detectionMillis: Long,
         serverCorrectedMillis: Long
     ) {
+        val deviceId = AuthManager.requireUid()
         db.collection("sessions").document(sessionCode)
             .collection("detections")
             .add(
@@ -76,6 +85,7 @@ class SessionRepository(private val deviceId: String) {
     }
 
     suspend fun writeMember(sessionCode: String, displayName: String) {
+        val deviceId = AuthManager.requireUid()
         db.collection("sessions").document(sessionCode)
             .collection("members").document(deviceId)
             .set(
@@ -87,6 +97,7 @@ class SessionRepository(private val deviceId: String) {
     }
 
     suspend fun updateListeningStatus(sessionCode: String, isListening: Boolean) {
+        val deviceId = AuthManager.requireUid()
         db.collection("sessions").document(sessionCode)
             .collection("members").document(deviceId)
             .set(
@@ -118,6 +129,7 @@ class SessionRepository(private val deviceId: String) {
      * a server-relative timestamp.
      */
     suspend fun measureServerOffset(): Long {
+        val deviceId = AuthManager.requireUid()
         val docRef = db.collection("calibrations").document(deviceId)
         var bestOffset = 0L
         var bestRtt = Long.MAX_VALUE

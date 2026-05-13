@@ -51,19 +51,28 @@ data class UiState(
 
 class GunShotViewModel(
     application: Application,
-    private val deviceId: String,
     private val sessionRepository: SessionRepository,
     private val userPreferences: UserPreferences
 ) : AndroidViewModel(application) {
 
+    // Populated from Firebase Auth anonymous uid as soon as sign-in completes.
+    // Null until then; "isMine" comparisons safely return false in that window.
+    private var deviceId: String? = null
+
     private val _uiState = MutableStateFlow(
         UiState(
-            deviceShortId = DeviceIdProvider.shortId(deviceId),
+            deviceShortId = "",
             latencyOffsetMs = userPreferences.latencyOffsetMs,
             username = userPreferences.username
         )
     )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private fun usernameOrShortId(): String {
+        val uname = _uiState.value.username
+        if (uname.isNotBlank()) return uname
+        return deviceId?.let { DeviceIdProvider.shortId(it) } ?: ""
+    }
 
     private var streamJob: Job? = null
     private var membersJob: Job? = null
@@ -83,6 +92,12 @@ class GunShotViewModel(
 
     init {
         startIdleWaveform()
+        viewModelScope.launch {
+            runCatching { sessionRepository.currentDeviceId() }.onSuccess { uid ->
+                deviceId = uid
+                _uiState.value = _uiState.value.copy(deviceShortId = DeviceIdProvider.shortId(uid))
+            }
+        }
     }
 
     private fun startIdleWaveform() {
@@ -127,7 +142,7 @@ class GunShotViewModel(
                 _uiState.value = current.copy(lastDetectedTimestamp = formatted, waveformBars = updatedBars)
 
                 if (current.isInSession && current.sessionCode != null) {
-                    val displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                    val displayName = usernameOrShortId()
                     val serverOffset = current.serverOffsetMs ?: 0L
                     val serverCorrected = adjusted + serverOffset
                     try {
@@ -142,8 +157,8 @@ class GunShotViewModel(
                 } else {
                     val entry = DetectionEntry(
                         timestamp = formatted,
-                        deviceId = deviceId,
-                        displayName = current.username.ifBlank { DeviceIdProvider.shortId(deviceId) },
+                        deviceId = deviceId.orEmpty(),
+                        displayName = usernameOrShortId(),
                         isMine = true,
                         serverTimestampMillis = adjusted
                     )
@@ -206,7 +221,8 @@ class GunShotViewModel(
         viewModelScope.launch {
             try {
                 val code = sessionRepository.createSession()
-                val displayName = _uiState.value.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                deviceId = sessionRepository.currentDeviceId()
+                val displayName = usernameOrShortId()
                 sessionRepository.writeMember(code, displayName)
                 _uiState.value = _uiState.value.copy(
                     sessionCode = code,
@@ -218,6 +234,7 @@ class GunShotViewModel(
                 startStream(code)
                 calibrateServerOffset()
             } catch (e: Exception) {
+                android.util.Log.e("GunShotViewModel", "createSession failed", e)
                 _uiState.value = _uiState.value.copy(
                     sessionLoading = false,
                     sessionError = "Failed to create session"
@@ -237,7 +254,8 @@ class GunShotViewModel(
             try {
                 val exists = sessionRepository.joinSession(upperCode)
                 if (exists) {
-                    val displayName = _uiState.value.username.ifBlank { DeviceIdProvider.shortId(deviceId) }
+                    deviceId = sessionRepository.currentDeviceId()
+                    val displayName = usernameOrShortId()
                     sessionRepository.writeMember(upperCode, displayName)
                     _uiState.value = _uiState.value.copy(
                         sessionCode = upperCode,
@@ -255,6 +273,7 @@ class GunShotViewModel(
                     )
                 }
             } catch (e: Exception) {
+                android.util.Log.e("GunShotViewModel", "joinSession failed", e)
                 _uiState.value = _uiState.value.copy(
                     sessionLoading = false,
                     sessionError = "Failed to join session"
