@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.xanderscannell.startinggundetector.ui.theme.AppMonoFont
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,11 +72,19 @@ fun SessionDialog(
                             val filtered = input.filter { it.isLetterOrDigit() }.uppercase()
                             if (filtered.length <= 4) joinCode = filtered
                         },
-                        placeholder = { Text("A3K9") },
+                        placeholder = {
+                            Text(
+                                text = "A3K9",
+                                fontFamily = AppMonoFont,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                letterSpacing = 4.sp
+                            )
+                        },
                         singleLine = true,
                         enabled = !loading,
                         textStyle = androidx.compose.ui.text.TextStyle(
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 4.sp

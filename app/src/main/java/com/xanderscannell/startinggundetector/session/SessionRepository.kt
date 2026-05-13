@@ -28,7 +28,9 @@ data class SessionMember(
 class SessionRepository {
 
     private val db = FirebaseFirestore.getInstance()
-    private val codeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    // Excludes visually/aurally ambiguous characters so codes are unambiguous when
+    // read aloud at a track or typed from a glance: O/0, I/1, L, B/8, S/5, Z/2.
+    private val codeChars = "ACDEFGHJKMNPQRTUVWXY34679"
 
     private fun generateCode(): String = (1..4).map { codeChars.random() }.joinToString("")
 

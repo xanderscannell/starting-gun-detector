@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.xanderscannell.startinggundetector.ui.theme.AppMonoFont
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -256,7 +257,7 @@ private fun CameraPreviewWithRecording(
 
         Text(
             text = clockText,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppMonoFont,
             fontWeight = FontWeight.Bold,
             fontSize = 22.sp,
             color = Color.White,
@@ -573,7 +574,7 @@ private fun VideoScrubberCore(
         // Timestamp display
         Text(
             text = frameTimestamp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppMonoFont,
             fontWeight = FontWeight.Bold,
             fontSize = 28.sp,
             color = Color.White,
@@ -689,7 +690,7 @@ private fun VideoScrubberCore(
                         )
                         Text(
                             text = TimestampFormatter.format(frameMillis),
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 15.sp,
                             color = Color.White,
                             modifier = Modifier.weight(1f)
@@ -697,7 +698,7 @@ private fun VideoScrubberCore(
                         if (split != null) {
                             Text(
                                 text = split,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppMonoFont,
                                 fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -752,7 +753,7 @@ private fun StartTimeSelector(
                         Text(
                             text = TimestampFormatter.format(st.timestampMillis),
                             fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = AppMonoFont
                         )
                     },
                     leadingIcon = if (isSelected) {

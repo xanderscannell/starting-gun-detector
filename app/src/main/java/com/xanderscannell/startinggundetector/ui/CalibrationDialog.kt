@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import com.xanderscannell.startinggundetector.ui.theme.AppMonoFont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xanderscannell.startinggundetector.audio.ListeningService
@@ -146,7 +147,7 @@ fun CalibrationDialog(
                         )
                         Text(
                             sample.detectedFormatted,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 12.sp,
                             modifier = Modifier.weight(1f)
                         )
@@ -167,7 +168,7 @@ fun CalibrationDialog(
                             },
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppMonoFont,
                                 fontSize = 12.sp
                             ),
                             keyboardOptions = KeyboardOptions(
@@ -180,7 +181,7 @@ fun CalibrationDialog(
                         )
                         Text(
                             text = sampleOffset?.let { "${if (it >= 0) "+" else ""}${it}ms" } ?: "—",
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 12.sp,
                             color = if (sampleOffset != null) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f),

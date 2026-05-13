@@ -7,7 +7,16 @@
 **Phase**: Phase 9 in progress — Firestore security hardening (rules deployment pending)
 **Progress**: Auth code shipped and verified on device; awaiting `firebase deploy --only firestore:rules` once all old app installs are updated. Lynx branch merged into master.
 
-## Recently Completed (2026-05-13 session)
+## Recently Completed (2026-05-13 session, later)
+
+- **Issue #2: Readable session codes (font + alphabet)**
+  - Bundled JetBrains Mono (Light/Regular/Medium/Bold) into `app/src/main/res/font/`
+  - New `ui/theme/Type.kt` exporting `AppMonoFont: FontFamily`
+  - Replaced every `FontFamily.Monospace` with `AppMonoFont` across 5 UI files (CalibrationDialog, CaptureScreen, RaceBrowserScreen, SessionDialog, StartingGunScreen)
+  - Added explicit mono+bold to two display sites that had no fontFamily override: the navigation drawer "Session: XXXX" footer and the join-session input placeholder
+  - **Tightened session-code alphabet** in `SessionRepository.codeChars` to `ACDEFGHJKMNPQRTUVWXY34679` (25 chars, 390K combos). Excludes `O, 0, I, 1, L, B, 8, S, 5, Z, 2` — fixes both visual and aural ambiguity (see ADR-010)
+
+## Recently Completed (2026-05-13 session, earlier)
 
 - **Phase 9: Firebase Auth + Firestore security rules**
   - Added `firebase-auth-ktx` dependency
@@ -90,7 +99,9 @@ app/src/main/java/com/xanderscannell/startinggundetector/
 │   ├── RaceBrowserScreen.kt          [complete]
 │   ├── SessionDialog.kt               [complete]
 │   ├── StartingGunScreen.kt           [complete]
-│   └── theme/Theme.kt                 [complete]
+│   └── theme/
+│       ├── Theme.kt                    [complete]
+│       └── Type.kt                     [complete] ← NEW (issue #2)
 ├── utils/
 │   └── TimestampFormatter.kt          [complete]
 └── viewmodel/

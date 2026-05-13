@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import com.xanderscannell.startinggundetector.ui.theme.AppMonoFont
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -304,6 +305,8 @@ private fun AppDrawerContent(
             Text(
                 text = "Session: ${uiState.sessionCode}",
                 style = MaterialTheme.typography.bodySmall,
+                fontFamily = AppMonoFont,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(16.dp)
             )
@@ -385,7 +388,7 @@ private fun ListenPage(
                 AutoSizeText(
                     text = liveClock,
                     maxFontSize = 52.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppMonoFont,
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.fillMaxWidth()
@@ -465,7 +468,7 @@ private fun ListenPage(
                         }
                         Text(
                             text = entry.timestamp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 20.sp,
                             fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Normal,
                             color = if (index == 0) MaterialTheme.colorScheme.primary
@@ -501,7 +504,7 @@ private fun ListenPage(
                 AutoSizeText(
                     text = liveClock,
                     maxFontSize = 52.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppMonoFont,
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.fillMaxWidth()
@@ -637,7 +640,7 @@ private fun SessionPage(
                     singleLine = true,
                     enabled = !uiState.sessionLoading,
                     textStyle = TextStyle(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppMonoFont,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 4.sp
@@ -702,7 +705,7 @@ private fun SessionPage(
                     )
                     Text(
                         text = uiState.sessionCode ?: "",
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppMonoFont,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp,
                         color = MaterialTheme.colorScheme.primary,
@@ -770,7 +773,7 @@ private fun SessionPage(
                         )
                         Text(
                             text = lastDetected ?: "—",
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppMonoFont,
                             fontSize = 15.sp,
                             color = if (member.isMine) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
@@ -794,7 +797,7 @@ private fun DeviceBadge(label: String, isMine: Boolean, modifier: Modifier = Mod
              else MaterialTheme.colorScheme.secondary
     Text(
         text = label,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = AppMonoFont,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = fg,
@@ -837,7 +840,7 @@ private fun StatusLabel(state: DetectorState, lastDetected: String) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Last: $lastDetected",
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppMonoFont,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -877,7 +880,7 @@ private fun LatencyOffsetControl(offsetMs: Int, onOffsetChange: (Int) -> Unit) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 textStyle = androidx.compose.ui.text.TextStyle(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppMonoFont,
                     fontSize = 14.sp,
                     textAlign = TextAlign.End
                 ),

@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.xanderscannell.startinggundetector.ui.theme.AppMonoFont
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -218,7 +219,7 @@ private fun RaceList(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = TimestampFormatter.format(race.createdAtMillis),
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppMonoFont,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     )

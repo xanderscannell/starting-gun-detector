@@ -278,6 +278,40 @@ Replace the SharedPreferences UUID with Firebase Anonymous Auth's `uid` as the c
 
 ---
 
+## ADR-010: Session Code Alphabet Excludes Ambiguous Characters
+
+**Date**: 2026-05-13
+**Status**: Accepted
+
+**Context**:
+Session codes are 4-character strings created by one phone and read aloud or shown to another phone (or to the Lynx desktop app). GitHub issue #2 reported that the system monospace font on Android renders `0` and `O` near-identically, making codes hard to read. Switching to JetBrains Mono (which has a slashed zero) fixes the visual problem, but two follow-on problems remained:
+
+1. **Aural ambiguity at the track**: "oh" and "zero" sound identical over wind, crowd noise, or a starter radio. The same applies to `I/1`, `S/5`, `B/8`, `Z/2`. A slashed-zero font cannot help when the code is spoken.
+2. **Visual ambiguity at a glance**: even in JetBrains Mono, `B/8`, `S/5`, `Z/2`, `L/1` remain easy to mis-read at small sizes or in poor light.
+
+The generator's alphabet was the full `A–Z` + `0–9` (36 chars), so any of these collisions could occur in any generated code.
+
+**Decision**:
+Restrict the session-code alphabet to `ACDEFGHJKMNPQRTUVWXY34679` (25 chars). Excludes `O, 0, I, 1, L, B, 8, S, 5, Z, 2`.
+
+**Rationale**:
+- 25⁴ = 390,625 unique codes — more than enough headroom for any realistic concurrency at this app's scale (the existing collision-retry loop in `createSession` remains safe)
+- Excluded characters cover every documented visual *and* aural confusable pair for English-spoken codes
+- Codes the system never generates can never match a join attempt — typo'd `O`s and `0`s just fail to look up, which is correct behaviour
+
+**Consequences**:
+- (+) Codes can be dictated over a noisy track without ambiguity
+- (+) Codes remain readable even in fonts without slashed zeros (Lynx desktop, future web view)
+- (-) Slightly shorter keyspace (390K vs 1.6M) — not a meaningful concern at this scale
+- (-) Pre-existing sessions created before this change may contain excluded characters; they remain valid because the user types whatever they're given, and Firestore lookups are case-insensitive-uppercase already
+
+**Alternatives considered**:
+- Crockford Base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`, 32 chars): handles visual collisions only — keeps `0/O` distinguishable on the wire but does nothing for aural ambiguity. Rejected as a half-measure.
+- Generate codes in lowercase + mixed-case: increases keyspace but multiplies visual confusables (`l/I/1`, `O/0/o`). Rejected.
+- Keep the full alphabet and rely on font + speaker care: rejected — the fix should not depend on user discipline.
+
+---
+
 <!-- Copy the template above for each new decision.
      Number sequentially: ADR-005, ADR-006, etc.
      When a decision is reversed, set Status to "Superseded by ADR-XXX" -->
