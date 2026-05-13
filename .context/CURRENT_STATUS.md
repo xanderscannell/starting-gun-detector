@@ -9,6 +9,10 @@
 
 ## Recently Completed (2026-05-13 session, later)
 
+- **Issue #1: Show session code in the top bar**
+  - Added optional `sessionCode: String?` parameter to `AppTopBar` in `StartingGunScreen.kt`
+  - Code renders next to the hamburger icon in `AppMonoFont`, bold, 20sp, brand red (`MaterialTheme.colorScheme.primary`)
+  - Hidden when not in a session; drawer footer kept as a secondary indicator (it's covered by the top bar code whenever the drawer is closed)
 - **Issue #2: Readable session codes (font + alphabet)**
   - Bundled JetBrains Mono (Light/Regular/Medium/Bold) into `app/src/main/res/font/`
   - New `ui/theme/Type.kt` exporting `AppMonoFont: FontFamily`

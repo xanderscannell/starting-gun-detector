@@ -149,6 +149,7 @@ fun StartingGunScreen(
         Column(modifier = modifier.fillMaxSize()) {
             AppTopBar(
                 currentPage = currentPage,
+                sessionCode = uiState.sessionCode,
                 onOpenDrawer = { scope.launch { drawerState.open() } },
                 onOpenSettings = { showSettingsSheet = true }
             )
@@ -215,6 +216,7 @@ fun StartingGunScreen(
 @Composable
 private fun AppTopBar(
     currentPage: AppPage,
+    sessionCode: String?,
     onOpenDrawer: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -225,12 +227,24 @@ private fun AppTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onOpenDrawer) {
-            Icon(
-                imageVector = Icons.Default.Menu,
-                contentDescription = "Open navigation",
-                tint = MaterialTheme.colorScheme.secondary
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onOpenDrawer) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Open navigation",
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+            }
+            if (sessionCode != null) {
+                Text(
+                    text = sessionCode,
+                    fontFamily = AppMonoFont,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    letterSpacing = 2.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
         Text(
             text = currentPage.name.lowercase().replaceFirstChar { it.uppercaseChar() },
