@@ -7,22 +7,38 @@ namespace detector_to_lynx
 {
     public partial class MainForm : Form
     {
-        private readonly ILogger<MainForm> _logger = Program.LoggerFactory.CreateLogger<MainForm>();
-        private readonly FirestoreService _firestoreService = new(Program.ApiKey);
+        private const int PollIntervalMs = 60_000;
+        private readonly ILogger<MainForm> _logger;
+        private readonly IFirestoreService _firestoreService;
+        private readonly IDetectionRefreshCoordinator _refreshCoordinator;
         private System.Windows.Forms.Timer? _pollTimer;
         private string? _sessionCode;
         private List<DetectionEntry> _lastDetections = [];
-        private int _consecutivePollFailures = 0;
+        private DateTimeOffset? _lastSuccessfulRefreshUtc;
 
-        private readonly LifDirectoryMonitor _lifMonitor = new();
+        private readonly LifDirectoryMonitor _lifMonitor;
         private MatchResult? _lastMatchResult;
         private List<ManualStartEntry> _manualStartEntries = [];
 
         // Maps DataGridView row index → DetectionEntry (null = Lynx-only row).
         private readonly Dictionary<int, DetectionEntry?> _rowToDetection = [];
 
-        public MainForm()
+        public MainForm(
+            IFirestoreService? firestoreService = null,
+            IDetectionRefreshCoordinator? refreshCoordinator = null,
+            LifDirectoryMonitor? lifMonitor = null,
+            ILogger<MainForm>? logger = null
+        )
         {
+            _logger = logger
+                ?? (Program.LoggerFactory
+                        ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance)
+                    .CreateLogger<MainForm>();
+
+            _firestoreService = firestoreService ?? new FirestoreService(Program.ApiKey);
+            _refreshCoordinator = refreshCoordinator ?? new DetectionRefreshCoordinator(_firestoreService);
+            _lifMonitor = lifMonitor ?? new LifDirectoryMonitor();
+
             InitializeComponent();
             LoadSavedSettings();
             AppendVersionToTitle();
@@ -111,14 +127,17 @@ namespace detector_to_lynx
             sessionStatusLabel.ForeColor = Color.Green;
             UpdateStatus($"Joined session {code}.");
             _logger.LogInformation("Joined session {SessionCode}", code);
+            refreshButton.Enabled = true;
             StartPolling();
         }
 
         private void LeaveSession()
         {
             StopPolling();
+            _refreshCoordinator.Reset();
             _sessionCode = null;
             _lastDetections.Clear();
+            _lastSuccessfulRefreshUtc = null;
             _lastMatchResult = null;
             _rowToDetection.Clear();
             calibrationGridView.Rows.Clear();
@@ -128,6 +147,7 @@ namespace detector_to_lynx
             sessionStatusLabel.ForeColor = SystemColors.GrayText;
             selectedTimeLabel.Text = "Selected: —";
             sendToLynxButton.Enabled = false;
+            refreshButton.Enabled = false;
             UpdateCalibrationSummaryLabel();
             UpdateStatus("Left session.");
             _logger.LogInformation("Left session");
@@ -137,11 +157,11 @@ namespace detector_to_lynx
 
         private void StartPolling()
         {
-            _pollTimer = new System.Windows.Forms.Timer { Interval = 2000 };
-            _pollTimer.Tick += async (_, _) => await PollDetectionsAsync();
+            _pollTimer = new System.Windows.Forms.Timer { Interval = PollIntervalMs };
+            _pollTimer.Tick += async (_, _) => await RefreshDetectionsAsync(manualRequest: false);
             _pollTimer.Start();
-            // Poll immediately on join
-            _ = PollDetectionsAsync();
+            // Refresh immediately on join.
+            _ = RefreshDetectionsAsync(manualRequest: false);
         }
 
         private void StopPolling()
@@ -151,35 +171,79 @@ namespace detector_to_lynx
             _pollTimer = null;
         }
 
-        private async Task PollDetectionsAsync()
+        private async Task RefreshDetectionsAsync(bool manualRequest)
         {
             if (_sessionCode == null) return;
 
-            List<DetectionEntry> detections;
-            try
+            var result = await _refreshCoordinator.RefreshAsync(_sessionCode, manualRequest);
+            switch (result.Status)
             {
-                detections = await _firestoreService.GetDetectionsAsync(_sessionCode);
+                case DetectionRefreshStatus.Updated:
+                    var detections = result.Detections ?? [];
+                    _lastSuccessfulRefreshUtc = DateTimeOffset.UtcNow;
+                    _logger.LogInformation(
+                        "Detections updated for session {SessionCode}: {Count} total, newest {Newest}",
+                        _sessionCode,
+                        detections.Count,
+                        detections.Count > 0 ? detections[0].Timestamp : "none"
+                    );
+                    _lastDetections = detections;
+                    RebuildCalibrationGrid();
+                    UpdateStatus(DescribeRefreshStatus($"Updated {detections.Count} detections"));
+                    break;
+
+                case DetectionRefreshStatus.NoChange:
+                    _lastSuccessfulRefreshUtc = DateTimeOffset.UtcNow;
+                    UpdateStatus(DescribeRefreshStatus("No new detections"));
+                    break;
+
+                case DetectionRefreshStatus.RateLimited:
+                    UpdateStatus(result.Message ?? "Firestore rate-limited.", error: true);
+                    break;
+
+                case DetectionRefreshStatus.BackoffActive:
+                    UpdateStatus(result.Message ?? "Backoff active.");
+                    break;
+
+                case DetectionRefreshStatus.Failed:
+                    UpdateStatus(result.Message ?? "Refresh failed.", error: true);
+                    break;
+
+                case DetectionRefreshStatus.Busy:
+                    if (manualRequest && !string.IsNullOrWhiteSpace(result.Message))
+                        UpdateStatus(result.Message);
+                    break;
             }
-            catch (Exception ex)
+        }
+
+        private void refreshButton_Click(object sender, EventArgs e)
+        {
+            _ = RefreshDetectionsAsync(manualRequest: true);
+        }
+
+        private string DescribeRefreshStatus(string prefix)
+        {
+            if (_lastSuccessfulRefreshUtc is DateTimeOffset lastSuccess)
             {
-                _consecutivePollFailures++;
-                _logger.LogError(ex, "Poll failed for session {SessionCode} (consecutive failures: {Count})", _sessionCode, _consecutivePollFailures);
-                return;
+                var elapsed = DateTimeOffset.UtcNow - lastSuccess;
+                return $"{prefix}. Last refresh {FormatBackoff(elapsed)} ago.";
             }
 
-            _consecutivePollFailures = 0;
+            return prefix;
+        }
 
-            if (detections.Count == _lastDetections.Count &&
-                detections.Select(d => d.ClientTimestamp).SequenceEqual(
-                    _lastDetections.Select(d => d.ClientTimestamp)))
-                return;
+        private static string FormatBackoff(TimeSpan span)
+        {
+            if (span < TimeSpan.Zero)
+                span = TimeSpan.Zero;
 
-            _logger.LogInformation(
-                "Detections updated for session {SessionCode}: {Count} total, newest {Newest}",
-                _sessionCode, detections.Count,
-                detections.Count > 0 ? detections[0].Timestamp : "none");
-            _lastDetections = detections;
-            RebuildCalibrationGrid();
+            if (span.TotalHours >= 1)
+                return $"{(int)span.TotalHours}h {span.Minutes}m";
+
+            if (span.TotalMinutes >= 1)
+                return $"{span.Minutes}m {span.Seconds}s";
+
+            return $"{span.Seconds}s";
         }
 
         // ─── Lynx directory / matching ───────────────────────────────────────

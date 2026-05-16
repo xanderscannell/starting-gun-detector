@@ -22,6 +22,7 @@
             sessionCodeLabel = new Label();
             sessionCodeTextBox = new TextBox();
             joinButton = new Button();
+            refreshButton = new Button();
             sessionStatusLabel = new Label();
 
             // ── Lynx Results group ───────────────────────────────────────────
@@ -84,15 +85,22 @@
             joinButton.Size = new Size(110, 27);
             joinButton.Click += joinButton_Click;
 
+            refreshButton.Text = "Refresh";
+            refreshButton.Location = new Point(296, 23);
+            refreshButton.Size = new Size(80, 27);
+            refreshButton.Enabled = false;
+            refreshButton.Click += refreshButton_Click;
+
             sessionStatusLabel.Text = "Not connected";
-            sessionStatusLabel.Location = new Point(300, 26);
-            sessionStatusLabel.Size = new Size(350, 23);
+            sessionStatusLabel.Location = new Point(384, 26);
+            sessionStatusLabel.Size = new Size(266, 23);
             sessionStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             sessionStatusLabel.ForeColor = SystemColors.GrayText;
 
             sessionGroupBox.Controls.Add(sessionCodeLabel);
             sessionGroupBox.Controls.Add(sessionCodeTextBox);
             sessionGroupBox.Controls.Add(joinButton);
+            sessionGroupBox.Controls.Add(refreshButton);
             sessionGroupBox.Controls.Add(sessionStatusLabel);
             sessionGroupBox.ResumeLayout(false);
 
@@ -317,6 +325,7 @@
         private Label sessionCodeLabel;
         private TextBox sessionCodeTextBox;
         private Button joinButton;
+        private Button refreshButton;
         private Label sessionStatusLabel;
 
         private GroupBox lynxResultsGroupBox;

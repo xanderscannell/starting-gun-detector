@@ -46,10 +46,20 @@ namespace detector_to_lynx
 
             try
             {
+                var firestoreService = new FirestoreService(ApiKey, loggerFactory: LoggerFactory);
+                var refreshCoordinator = new DetectionRefreshCoordinator(firestoreService, LoggerFactory);
+                var lifMonitor = new LifDirectoryMonitor(LoggerFactory);
+                var mainFormLogger = LoggerFactory.CreateLogger<MainForm>();
+
                 // To customize application configuration such as set high DPI settings or default font,
                 // see https://aka.ms/applicationconfiguration.
                 ApplicationConfiguration.Initialize();
-                Application.Run(new MainForm());
+                Application.Run(new MainForm(
+                    firestoreService,
+                    refreshCoordinator,
+                    lifMonitor,
+                    mainFormLogger
+                ));
             }
             finally
             {

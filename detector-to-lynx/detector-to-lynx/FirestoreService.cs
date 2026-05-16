@@ -6,7 +6,7 @@ namespace detector_to_lynx
 {
     public record DetectionEntry(string Timestamp, string DisplayName, long ClientTimestamp);
 
-    public class FirestoreService
+    public class FirestoreService : IFirestoreService
     {
         public const string ProjectId = "starting-gun-detector";
 
